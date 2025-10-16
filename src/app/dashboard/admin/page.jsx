@@ -235,6 +235,9 @@ export default function AdminPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectBudget, setNewProjectBudget] = useState("");
+  const [newProjectLocation, setNewProjectLocation] = useState("");
+  const [collaboratorQuery, setCollaboratorQuery] = useState("");
+  const [selectedCollaborators, setSelectedCollaborators] = useState([]);
   const [submitError, setSubmitError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -263,10 +266,14 @@ export default function AdminPage() {
     setSubmitError(null);
 
     try {
-      const { data, error } = await supabase.from("Probuild").insert([
+      const { data, error } = await supabase.from("project").insert([
         {
-          name: newProjectName.trim(),
+          projectName: newProjectName.trim(),
           budget: budgetNumber,
+          projectLocation: newProjectLocation || null,
+          projectCollabrate: selectedCollaborators.length
+            ? selectedCollaborators
+            : null,
           created_at: new Date().toISOString(),
         },
       ]);
@@ -778,6 +785,41 @@ export default function AdminPage() {
   );
 }
 
+// Simple collaborator suggestion helper (replace with server-driven data later)
+function CollaboratorSuggestions({ query, onSelect }) {
+  const candidates = [
+    { id: "u1", name: "Sarah Chen" },
+    { id: "u2", name: "Mike Rodriguez" },
+    { id: "u3", name: "John Martinez" },
+    { id: "u4", name: "Anita Gupta" },
+    { id: "u5", name: "Samuel Lee" },
+  ];
+
+  if (!query || query.trim().length < 1) return null;
+
+  const lower = query.toLowerCase();
+  const matches = candidates
+    .filter((c) => c.name.toLowerCase().includes(lower))
+    .slice(0, 5);
+
+  if (matches.length === 0)
+    return <div className="mt-2 text-sm text-gray-500">No matches</div>;
+
+  return (
+    <ul className="mt-2 bg-white border rounded shadow max-h-40 overflow-auto">
+      {matches.map((m) => (
+        <li
+          key={m.id}
+          onClick={() => onSelect(m)}
+          className="p-2 hover:bg-gray-100 cursor-pointer"
+        >
+          {m.name}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // Modal markup appended after component so it's easy to find; kept in same file for simplicity.
 function CreateProjectModal({
   isOpen,
@@ -786,11 +828,17 @@ function CreateProjectModal({
   setName,
   budget,
   setBudget,
+  newProjectLocation,
+  setNewProjectLocation,
+  setSelectedCollaborators,
   onSubmit,
   error,
   isSubmitting,
 }) {
+  const [collaboratorQuery, setCollaboratorQuery] = useState("");
+  const [selectedCollaborators, setSelectedCollaboratorsState] = useState([]);
   if (!isOpen) return null;
+
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 bg-opacity-50">
@@ -807,6 +855,7 @@ function CreateProjectModal({
               className="mt-1 block w-full border border-gray-300 rounded-md p-2"
             />
           </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Budget (USD)
@@ -817,6 +866,60 @@ function CreateProjectModal({
               className="mt-1 block w-full border border-gray-300 rounded-md p-2"
             />
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Location
+            </label>
+            <input
+              value={newProjectLocation}
+              onChange={(e) => setNewProjectLocation(e.target.value)}
+              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Collaborators
+            </label>
+            <input
+              value={collaboratorQuery}
+              onChange={(e) => setCollaboratorQuery(e.target.value)}
+              placeholder="Search collaborators..."
+              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+            />
+            <CollaboratorSuggestions
+              query={collaboratorQuery}
+              onSelect={(c) => {
+                if (!selectedCollaborators.find((s) => s.id === c.id)) {
+                  setSelectedCollaborators((prev) => [...prev, c]);
+                }
+                setCollaboratorQuery("");
+              }}
+            />
+
+            <div className="mt-2 flex flex-wrap gap-2">
+              {selectedCollaborators.map((c) => (
+                <div
+                  key={c.id}
+                  className="px-2 py-1 bg-gray-200 rounded-full text-sm flex items-center space-x-2"
+                >
+                  <span>{c.name}</span>
+                  <button
+                    onClick={() =>
+                      setSelectedCollaborators((prev) =>
+                        prev.filter((x) => x.id !== c.id)
+                      )
+                    }
+                    className="text-xs text-gray-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {error && <div className="text-sm text-red-600">{error}</div>}
         </div>
         <div className="mt-6 flex justify-end space-x-3">
