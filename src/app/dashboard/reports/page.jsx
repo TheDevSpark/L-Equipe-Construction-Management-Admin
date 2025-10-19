@@ -1,12 +1,37 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { ProjectSelector, ProjectInfoCard } from "@/components/ProjectSelector";
+import { ThemeToggle } from "@/components/theme-toggle";
+import supabase from "../../../../lib/supabaseClinet";
 
 export default function ReportsPage() {
+  // Project state
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [projects, setProjects] = useState([]);
+  
   const [reportData, setReportData] = useState({});
   const [showPreview, setShowPreview] = useState(false);
   const [selectedReport, setSelectedReport] = useState(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Load projects
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    try {
+      const { data, error } = await supabase.from("project").select("*");
+      if (error) throw error;
+      setProjects(data || []);
+      if (data && data.length > 0) {
+        setSelectedProject(data[0]);
+      }
+    } catch (error) {
+      console.error("Error loading projects:", error);
+    }
+  };
 
   // Generate dynamic report data
   useEffect(() => {
@@ -152,11 +177,30 @@ export default function ReportsPage() {
 
   return (
     <div>
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Reports & Exporting</h1>
-        <p className="text-gray-600 mt-1">Generate and export project reports in multiple formats</p>
+      {/* Project Selection */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+        <div className="flex-1">
+          <h1 className="text-3xl lg:text-4xl font-bold text-foreground mb-2">Reports & Exporting</h1>
+          <p className="text-muted-foreground">Generate and export project reports in multiple formats</p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:gap-4">
+          <div className="flex-1 lg:flex-none">
+            <ProjectSelector
+              selectedProject={selectedProject}
+              onProjectSelect={setSelectedProject}
+              onProjectCreate={(newProject) => {
+                console.log("Project created:", newProject);
+              }}
+              showCreateButton={true}
+              className="w-full lg:w-auto"
+            />
+          </div>
+          <ThemeToggle />
+        </div>
       </div>
+
+      {/* Project Info */}
+      <ProjectInfoCard project={selectedProject} />
 
       {/* Report Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -312,15 +356,15 @@ export default function ReportsPage() {
       {/* Report Preview Modal */}
       {showPreview && selectedReport && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-card text-card-foreground rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-xl border">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800">
+            <div className="flex items-center justify-between p-6 border-b border-border">
+              <h2 className="text-xl font-semibold text-card-foreground">
                 Report Preview - {reportTypes.find(r => r.id === selectedReport)?.title}
               </h2>
               <button
                 onClick={() => setShowPreview(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-muted-foreground hover:text-foreground transition-colors"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

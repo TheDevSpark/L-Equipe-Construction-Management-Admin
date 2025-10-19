@@ -1,13 +1,38 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { ProjectSelector, ProjectInfoCard } from "@/components/ProjectSelector";
+import { ThemeToggle } from "@/components/theme-toggle";
+import supabase from "../../../../lib/supabaseClinet";
 
 export default function DocumentsPage() {
+  // Project state
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [projects, setProjects] = useState([]);
+  
   const [documents, setDocuments] = useState([]);
   const [filteredDocuments, setFilteredDocuments] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Load projects
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    try {
+      const { data, error } = await supabase.from("project").select("*");
+      if (error) throw error;
+      setProjects(data || []);
+      if (data && data.length > 0) {
+        setSelectedProject(data[0]);
+      }
+    } catch (error) {
+      console.error("Error loading projects:", error);
+    }
+  };
 
   // Generate dynamic document data
   useEffect(() => {
@@ -149,27 +174,46 @@ export default function DocumentsPage() {
   return (
     <div>
       {/* Header Section */}
-      <div className="flex justify-between items-start mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Document Management</h1>
-          <p className="text-gray-600 mt-1">Centralized repository for drawings, submittals, RFIs, and project documents</p>
+      {/* Project Selection */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+        <div className="flex-1">
+          <h1 className="text-3xl lg:text-4xl font-bold text-foreground mb-2">Documents</h1>
+          <p className="text-muted-foreground">Centralized repository for drawings, submittals, RFIs, and project documents</p>
         </div>
-        <button
-          onClick={handleUploadDocument}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-          </svg>
-          <span>Upload Document</span>
-        </button>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:gap-4">
+          <div className="flex-1 lg:flex-none">
+            <ProjectSelector
+              selectedProject={selectedProject}
+              onProjectSelect={setSelectedProject}
+              onProjectCreate={(newProject) => {
+                console.log("Project created:", newProject);
+              }}
+              showCreateButton={true}
+              className="w-full lg:w-auto"
+            />
+          </div>
+          <button
+            onClick={handleUploadDocument}
+            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center space-x-2 w-full sm:w-auto"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <span className="hidden sm:inline">Upload Document</span>
+            <span className="sm:hidden">Upload</span>
+          </button>
+          <ThemeToggle />
+        </div>
       </div>
 
+      {/* Project Info */}
+      <ProjectInfoCard project={selectedProject} />
+
       {/* Search and Filter Bar */}
-      <div className="flex space-x-4 mb-6">
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="flex-1 relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="h-5 w-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
@@ -178,13 +222,13 @@ export default function DocumentsPage() {
             placeholder="Search documents..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-input text-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
           />
         </div>
         <select
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="px-4 py-2 border border-input rounded-lg bg-input text-foreground focus:ring-2 focus:ring-ring focus:border-transparent w-full sm:w-auto sm:min-w-[180px]"
         >
           {categories.map((category) => (
             <option key={category} value={category}>

@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import supabase from "../../../../lib/supabaseClinet";
+import { ProjectSelector, ProjectInfoCard } from "@/components/ProjectSelector";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -23,6 +25,10 @@ ChartJS.register(
 );
 
 export default function AdminPage() {
+  // Project state
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [projects, setProjects] = useState([]);
+  
   // Dynamic data states
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [scheduleTasks, setScheduleTasks] = useState([]);
@@ -45,6 +51,24 @@ export default function AdminPage() {
   });
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Load projects
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  const loadProjects = async () => {
+    try {
+      const { data, error } = await supabase.from("project").select("*");
+      if (error) throw error;
+      setProjects(data || []);
+      if (data && data.length > 0) {
+        setSelectedProject(data[0]);
+      }
+    } catch (error) {
+      console.error("Error loading projects:", error);
+    }
+  };
 
   // Generate dynamic data
   useEffect(() => {
@@ -249,6 +273,8 @@ export default function AdminPage() {
     setIsModalOpen(false);
     setNewProjectName("");
     setNewProjectBudget("");
+    setNewProjectLocation("");
+    setSelectedCollaborators([]);
     setSubmitError(null);
     setIsSubmitting(false);
   };
@@ -272,22 +298,38 @@ export default function AdminPage() {
           budget: budgetNumber,
           projectLocation: newProjectLocation || null,
           projectCollabrate: selectedCollaborators.length
-            ? selectedCollaborators
+            ? selectedCollaborators.map(c => c.name).join(', ')
             : null,
           created_at: new Date().toISOString(),
         },
       ]);
 
       if (error) {
-        setSubmitError(error.message || "Failed to create project");
+        console.error("Supabase error:", error);
+        
+        // Handle specific RLS error
+        if (error.code === '42501') {
+          setSubmitError("Database permission error. Please run RLS policies in Supabase SQL Editor. Check the supabase-project-rls-fix.sql file.");
+        } else if (error.code === '42P01') {
+          setSubmitError("Project table not found. Please create the project table in Supabase.");
+        } else if (error.message?.includes('column') && error.message?.includes('does not exist')) {
+          setSubmitError("Table structure error. Please check project table columns.");
+        } else {
+          setSubmitError(error.message || "Failed to create project");
+        }
+        
         setIsSubmitting(false);
         return;
       }
 
+      console.log("Project created successfully:", data);
       // On success, close modal and optionally refresh local state
       closeModal();
-      // Optionally add the created project to UI state if you keep a projects list
+      // Show success message
+      toast.success("Project created successfully!");
+      
     } catch (err) {
+      console.error("Unexpected error:", err);
       setSubmitError(err.message || "Unexpected error");
       setIsSubmitting(false);
     }
@@ -378,6 +420,31 @@ export default function AdminPage() {
           </div>
         </div>
       </div>
+
+      {/* Project Selection */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+        <div className="flex-1">
+          <h1 className="text-3xl lg:text-4xl font-bold text-foreground mb-2">Admin Dashboard</h1>
+          <p className="text-muted-foreground">Full system control and management access</p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:gap-4">
+          <div className="flex-1 lg:flex-none">
+            <ProjectSelector
+              selectedProject={selectedProject}
+              onProjectSelect={setSelectedProject}
+              onProjectCreate={(newProject) => {
+                console.log("Project created:", newProject);
+              }}
+              showCreateButton={true}
+              className="w-full lg:w-auto"
+            />
+          </div>
+          <ThemeToggle />
+        </div>
+      </div>
+
+      {/* Project Info */}
+      <ProjectInfoCard project={selectedProject} />
 
       {/* Key Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
@@ -777,6 +844,10 @@ export default function AdminPage() {
         setName={setNewProjectName}
         budget={newProjectBudget}
         setBudget={setNewProjectBudget}
+        location={newProjectLocation}
+        setLocation={setNewProjectLocation}
+        selectedCollaborators={selectedCollaborators}
+        setSelectedCollaborators={setSelectedCollaborators}
         onSubmit={handleCreateProject}
         error={submitError}
         isSubmitting={isSubmitting}
@@ -828,111 +899,224 @@ function CreateProjectModal({
   setName,
   budget,
   setBudget,
-  newProjectLocation,
-  setNewProjectLocation,
+  location,
+  setLocation,
+  selectedCollaborators,
   setSelectedCollaborators,
   onSubmit,
   error,
   isSubmitting,
 }) {
   const [collaboratorQuery, setCollaboratorQuery] = useState("");
-  const [selectedCollaborators, setSelectedCollaboratorsState] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  
   if (!isOpen) return null;
 
+  // Available collaborators list
+  const availableCollaborators = [
+    { id: "u1", name: "Sarah Chen", email: "sarah@company.com" },
+    { id: "u2", name: "Mike Rodriguez", email: "mike@company.com" },
+    { id: "u3", name: "John Martinez", email: "john@company.com" },
+    { id: "u4", name: "Anita Gupta", email: "anita@company.com" },
+    { id: "u5", name: "Samuel Lee", email: "samuel@company.com" },
+    { id: "u6", name: "Emma Wilson", email: "emma@company.com" },
+    { id: "u7", name: "David Kim", email: "david@company.com" },
+    { id: "u8", name: "Lisa Thompson", email: "lisa@company.com" },
+  ];
+
+  // Filter collaborators based on search query
+  const filteredCollaborators = availableCollaborators.filter(collab => 
+    collab.name.toLowerCase().includes(collaboratorQuery.toLowerCase()) &&
+    !selectedCollaborators.find(selected => selected.id === collab.id)
+  );
+
+  const handleCollaboratorSelect = (collaborator) => {
+    setSelectedCollaborators(prev => [...prev, collaborator]);
+    setCollaboratorQuery("");
+    setShowSuggestions(false);
+  };
+
+  const handleCollaboratorRemove = (collaboratorId) => {
+    setSelectedCollaborators(prev => prev.filter(c => c.id !== collaboratorId));
+  };
+
+  const handleInputChange = (e) => {
+    setCollaboratorQuery(e.target.value);
+    setShowSuggestions(e.target.value.length > 0);
+  };
+
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 bg-opacity-50">
-      <div className="bg-white rounded-lg w-full max-w-md p-6">
-        <h3 className="text-lg font-semibold mb-4">Create Project</h3>
-        <div className="space-y-3">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={handleBackdropClick}
+    >
+      <div className="bg-card text-card-foreground rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl border">
+        <div className="flex items-center justify-between p-2">
+          <h3 className="text-xl font-semibold text-card-foreground">Create New Project</h3>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-6">
+          <div className="space-y-4">
+          {/* Project Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Project Name
+            <label className="block text-sm font-medium text-card-foreground mb-2">
+              Project Name *
             </label>
             <input
+              type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              placeholder="Enter project name"
+              className="w-full border border-input rounded-lg px-3 py-2 bg-input text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
+          {/* Budget */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-card-foreground mb-2">
               Budget (USD)
             </label>
             <input
+              type="number"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              placeholder="Enter budget amount"
+              className="w-full border border-input rounded-lg px-3 py-2 bg-input text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
+          {/* Location */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Location
+            <label className="block text-sm font-medium text-card-foreground mb-2">
+              Project Location
             </label>
             <input
-              value={newProjectLocation}
-              onChange={(e) => setNewProjectLocation(e.target.value)}
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
+              type="text"
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              placeholder="Enter project location"
+              className="w-full border border-input rounded-lg px-3 py-2 bg-input text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
+          {/* Collaborators */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-card-foreground mb-2">
               Collaborators
             </label>
-            <input
-              value={collaboratorQuery}
-              onChange={(e) => setCollaboratorQuery(e.target.value)}
-              placeholder="Search collaborators..."
-              className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-            />
-            <CollaboratorSuggestions
-              query={collaboratorQuery}
-              onSelect={(c) => {
-                if (!selectedCollaborators.find((s) => s.id === c.id)) {
-                  setSelectedCollaborators((prev) => [...prev, c]);
-                }
-                setCollaboratorQuery("");
-              }}
-            />
-
-            <div className="mt-2 flex flex-wrap gap-2">
-              {selectedCollaborators.map((c) => (
-                <div
-                  key={c.id}
-                  className="px-2 py-1 bg-gray-200 rounded-full text-sm flex items-center space-x-2"
-                >
-                  <span>{c.name}</span>
-                  <button
-                    onClick={() =>
-                      setSelectedCollaborators((prev) =>
-                        prev.filter((x) => x.id !== c.id)
-                      )
-                    }
-                    className="text-xs text-gray-600"
-                  >
-                    ✕
-                  </button>
+            <div className="relative">
+              <input
+                type="text"
+                value={collaboratorQuery}
+                onChange={handleInputChange}
+                onFocus={() => setShowSuggestions(collaboratorQuery.length > 0)}
+                placeholder="Search and select collaborators..."
+                className="w-full border border-input rounded-lg px-3 py-2 bg-input text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              
+              {/* Searchable Dropdown */}
+              {showSuggestions && filteredCollaborators.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-card border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {filteredCollaborators.map((collab) => (
+                    <div
+                      key={collab.id}
+                      onClick={() => handleCollaboratorSelect(collab)}
+                      className="px-3 py-2 hover:bg-accent cursor-pointer flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="font-medium text-card-foreground">{collab.name}</div>
+                        <div className="text-sm text-muted-foreground">{collab.email}</div>
+                      </div>
+                      <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
+              
+              {/* No results message */}
+              {showSuggestions && collaboratorQuery.length > 0 && filteredCollaborators.length === 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-card border border-input rounded-lg shadow-lg px-3 py-2 text-muted-foreground">
+                  No collaborators found
+                </div>
+              )}
             </div>
+
+            {/* Selected Collaborators */}
+            {selectedCollaborators.length > 0 && (
+              <div className="mt-3">
+                <div className="text-sm font-medium text-card-foreground mb-2">
+                  Selected Collaborators:
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedCollaborators.map((collab) => (
+                    <div
+                      key={collab.id}
+                      className="px-3 py-1 bg-primary text-primary-foreground rounded-full text-sm flex items-center space-x-2"
+                    >
+                      <span>{collab.name}</span>
+                      <button
+                        onClick={() => handleCollaboratorRemove(collab.id)}
+                        className="hover:bg-primary-foreground/20 rounded-full p-0.5"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
-          {error && <div className="text-sm text-red-600">{error}</div>}
+          {/* Error Message */}
+          {error && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <div className="text-sm text-destructive">{error}</div>
+            </div>
+          )}
         </div>
-        <div className="mt-6 flex justify-end space-x-3">
-          <button onClick={onClose} className="px-4 py-2 bg-gray-100 rounded">
+
+        {/* Modal Actions */}
+        <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-border">
+          <button
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="px-4 py-2 border border-input rounded-lg text-card-foreground hover:bg-accent transition-colors disabled:opacity-50"
+          >
             Cancel
           </button>
           <button
             onClick={onSubmit}
-            disabled={isSubmitting}
-            className="px-4 py-2 bg-blue-600 text-white rounded"
+            disabled={isSubmitting || !name.trim()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? "Saving..." : "Add"}
+            {isSubmitting ? (
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin"></div>
+                <span>Creating...</span>
+              </div>
+            ) : (
+              "Create Project"
+            )}
           </button>
+          </div>
         </div>
       </div>
     </div>
