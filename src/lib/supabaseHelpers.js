@@ -80,7 +80,7 @@ export async function upsertProjectJson({
     // Using insert().upsert is not directly available in supabase-js; we emulate by trying insert and then update on conflict
     const { data: insertData, error: insertError } = await supabase
       .from(table)
-      .insert([{ id: uuidv4(), ...payload }])
+      .insert([{...payload }])
       .select()
       .maybeSingle();
     if (insertError) {
