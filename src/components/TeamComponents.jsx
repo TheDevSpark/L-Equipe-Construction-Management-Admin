@@ -39,7 +39,6 @@ export function TeamMemberCard({ teamMember, onEdit, onDelete, onAssign }) {
             </div>
             <div>
               <h3 className="text-lg font-bold text-gray-900">{fullName}</h3>
-              <p className="text-sm text-gray-500">{teamMember.email}</p>
             </div>
           </div>
         </div>

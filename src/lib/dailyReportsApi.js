@@ -161,7 +161,7 @@ export const dailyReportsApi = {
   async getReportsByStatus(status, projectId = null) {
     try {
       let query = supabase
-        .from("daily_reports_with_details")
+        .from("daily_reports")
         .select("*")
         .eq("status", status)
         .order("created_at", { ascending: false });

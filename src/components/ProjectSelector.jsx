@@ -41,9 +41,10 @@ export function ProjectSelector({
   };
 
   const handleProjectChange = (projectId) => {
-    const project = projects.find(p => p.id === projectId);
+    const project = projects.find((p) => p.id === Number(projectId));
     onProjectSelect(project || null);
   };
+
 
   return (
     <ClientOnly>

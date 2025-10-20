@@ -727,17 +727,17 @@ export default function TeamsPage() {
                   <Label htmlFor="role">Role</Label>
                   <select
                     id="role"
-                    value={newMember.role}
+                    value={newMember.role || ""}
                     onChange={(e) =>
                       setNewMember({ ...newMember, role: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
                     required
-                    defaultValue={'Select Role'}
                   >
+                    <option value="">Select Role</option>
                     <option value="owner">Owner</option>
                     <option value="client">Client</option>
-                    <option value="pm">Pm</option>
+                    <option value="pm">Project Manager</option>
                   </select>
                 </div>
 
