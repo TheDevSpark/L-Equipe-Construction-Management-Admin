@@ -22,6 +22,7 @@ import {
   dailyReportsApi,
   dailyReportMessagesApi,
   dailyReportsUtils,
+  getDailyReportsWithProjectName,
 } from "@/lib/dailyReportsApi";
 import toast from "react-hot-toast";
 import supabase from "../../../../lib/supabaseClinet";
@@ -33,6 +34,20 @@ export default function DailyReportsPage() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+
+useEffect(() => {
+  const fetchReports = async () => {
+    try {
+      const reports = await getDailyReportsWithProjectName();
+      setReports(reports);
+      console.log("Fetched reports:", reports);
+    } catch (err) {
+      console.error("Failed to fetch reports:", err);
+    }
+  };
+
+  fetchReports();
+}, []);
 
   // Modal states
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);

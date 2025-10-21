@@ -144,7 +144,8 @@ export function DailyReportForm({
     delays_reasons: reportData?.delays_reasons || '',
     total_workers: reportData?.total_workers || 0,
     total_work_hours: reportData?.total_work_hours || 0,
-    progress_percentage: reportData?.progress_percentage || 0
+    progress_percentage: reportData?.progress_percentage || 0,
+    project_id: reportData?.project_id || '',
   });
 
   const [selectedImages, setSelectedImages] = useState([]);
@@ -209,8 +210,9 @@ export function DailyReportForm({
         total_workers: formData.total_workers,
         total_work_hours: formData.total_work_hours,
         progress_percentage: formData.progress_percentage,
+        project_id: formData.project_id,
         reporter_id: "current-user-id", // Replace with actual user ID
-        status: isEditing ? (formData.status || 'draft') : 'draft'
+        status: isEditing ? formData.status || "draft" : "draft",
       };
 
       // If user explicitly selected an existing project and it's a valid UUID, include it.
@@ -255,7 +257,8 @@ export function DailyReportForm({
         total_workers: formData.total_workers,
         total_work_hours: formData.total_work_hours,
         progress_percentage: formData.progress_percentage,
-        status: 'submitted'
+        status: 'submitted',
+        project_id: formData?.project_id,
       };
 
      

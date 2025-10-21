@@ -895,7 +895,7 @@ function CollaboratorSuggestions({ query, onSelect }) {
 // Modal markup appended after component so it's easy to find; kept in same file for simplicity.
 function CreateProjectModal({
   isOpen,
-  onClose,
+  onClose,  
   name,
   setName,
   budget,
@@ -910,46 +910,61 @@ function CreateProjectModal({
 }) {
   const [collaboratorQuery, setCollaboratorQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
-  
-  if (!isOpen) return null;
+ const [data, setData] = useState([]); // ✅ initially empty array
 
-  // Available collaborators list
-  const availableCollaborators = [
-    { id: "u1", name: "Sarah Chen", email: "sarah@company.com" },
-    { id: "u2", name: "Mike Rodriguez", email: "mike@company.com" },
-    { id: "u3", name: "John Martinez", email: "john@company.com" },
-    { id: "u4", name: "Anita Gupta", email: "anita@company.com" },
-    { id: "u5", name: "Samuel Lee", email: "samuel@company.com" },
-    { id: "u6", name: "Emma Wilson", email: "emma@company.com" },
-    { id: "u7", name: "David Kim", email: "david@company.com" },
-    { id: "u8", name: "Lisa Thompson", email: "lisa@company.com" },
-  ];
+ const getAllUser = async () => {
+   const { data: users, error } = await supabase.from("profiles").select("*");
 
-  // Filter collaborators based on search query
-  const filteredCollaborators = availableCollaborators.filter(collab => 
-    collab.name.toLowerCase().includes(collaboratorQuery.toLowerCase()) &&
-    !selectedCollaborators.find(selected => selected.id === collab.id)
-  );
+   if (error) {
+     console.error("Error fetching users:", error);
+   } else {
+     console.log("Users fetched:", users);
+     setData(users || []); // ✅ safe fallback
+   }
+ };
 
-  const handleCollaboratorSelect = (collaborator) => {
-    setSelectedCollaborators(prev => [...prev, collaborator]);
-    setCollaboratorQuery("");
-    setShowSuggestions(false);
-  };
+ useEffect(() => {
+   getAllUser();
+ }, []);
 
-  const handleCollaboratorRemove = (collaboratorId) => {
-    setSelectedCollaborators(prev => prev.filter(c => c.id !== collaboratorId));
-  };
+   if (!isOpen) return null;
 
-  const handleInputChange = (e) => {
-    setCollaboratorQuery(e.target.value);
-    setShowSuggestions(e.target.value.length > 0);
-  };
+ // ✅ Map Supabase data to collaborators
+ const availableCollaborators = data.map((user) => ({
+   id: user.id,
+   name: `${user.first_name || ""} ${user.last_name || ""}`.trim(),
+   email: user.email || "",
+   role: user.role || "",
+ }));
+
+ // ✅ Filter collaborators based on search input
+ const filteredCollaborators = availableCollaborators.filter(
+   (collab) =>
+     collab.name.toLowerCase().includes(collaboratorQuery.toLowerCase()) &&
+     !selectedCollaborators.some((sel) => sel.id === collab.id)
+ );
+
+ const handleCollaboratorSelect = (collaborator) => {
+   setSelectedCollaborators((prev) => [...prev, collaborator]);
+   setCollaboratorQuery("");
+   setShowSuggestions(false);
+ };
+
+ const handleCollaboratorRemove = (collaboratorId) => {
+   setSelectedCollaborators((prev) =>
+     prev.filter((c) => c.id !== collaboratorId)
+   );
+ };
+
+ const handleInputChange = (e) => {
+   setCollaboratorQuery(e.target.value);
+   setShowSuggestions(e.target.value.trim().length > 0);
+ };
 
   const handleBackdropClick = (e) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
+   if (e.target === e.currentTarget) {
+     onClose();
+   }
   };
 
   return (

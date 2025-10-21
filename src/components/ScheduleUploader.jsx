@@ -91,63 +91,136 @@ export default function ScheduleUploader({ projectId }) {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Upload Controls */}
-      <div className="flex flex-wrap items-center gap-3">
-        <input type="file" accept=".xlsx,.xls" onChange={handleFile} />
-        <Button onClick={() => handleUpload(false)} disabled={loading}>
-          Upload
-        </Button>
-        <Button onClick={() => handleUpload(true)} disabled={loading}>
-          Update
-        </Button>
-        <Button onClick={loadFromSupabase} variant="outline">
-          Refresh
-        </Button>
+    // <div className="space-y-4">
+    //   {/* Upload Controls */}
+    //   <div className="flex flex-wrap items-center gap-3">
+    //     <input type="file" accept=".xlsx,.xls" onChange={handleFile} />
+    //     <Button onClick={() => handleUpload(false)} disabled={loading}>
+    //       Upload
+    //     </Button>
+    //     <Button onClick={() => handleUpload(true)} disabled={loading}>
+    //       Update
+    //     </Button>
+    //     <Button onClick={loadFromSupabase} variant="outline">
+    //       Refresh
+    //     </Button>
+    //   </div>
+
+    //   {/* Display Table + Gantt Chart */}
+    //   <div className="border p-3 rounded-md">
+    //     {tasks.length === 0 ? (
+    //       <p className="text-sm text-muted-foreground">
+    //         No schedule tasks available.
+    //       </p>
+    //     ) : (
+    //       <>
+    //         <div className="overflow-x-auto mb-4">
+    //           <table className="w-full text-sm border-collapse">
+    //             <thead>
+    //               <tr className="bg-muted text-xs text-muted-foreground">
+    //                 <th className="p-2 text-left">Task</th>
+    //                 <th className="p-2 text-left">Start</th>
+    //                 <th className="p-2 text-left">End</th>
+    //                 <th className="p-2 text-left">Progress</th>
+    //                 <th className="p-2 text-left">Dependencies</th>
+    //               </tr>
+    //             </thead>
+    //             <tbody>
+    //               {tasks.map((t) => (
+    //                 <tr key={t.id} className="border-t">
+    //                   <td className="p-2">{t.name}</td>
+    //                   <td className="p-2">{String(t.start || "")}</td>
+    //                   <td className="p-2">{String(t.end || "")}</td>
+    //                   <td className="p-2">{t.progress ?? 0}%</td>
+    //                   <td className="p-2">{String(t.dependencies || "")}</td>
+    //                 </tr>
+    //               ))}
+    //             </tbody>
+    //           </table>
+    //         </div>
+
+    //         {/* <div style={{ height: 400 }}>
+    //           <Gantt data={tasks} />
+    //         </div> */}
+    //         <div style={{ height: 400 }}>
+    //           <ClientGantt data={tasks} />
+    //         </div>
+    //       </>
+    //     )}
+    //   </div>
+    // </div>
+    <div className="space-y-6">
+      {/* HEADER */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h2 className="text-2xl font-semibold">📅 Project Schedule</h2>
+          <p className="text-sm text-muted-foreground">
+            Upload Excel to visualize and manage project timelines.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFile}
+            className="text-sm border-green-600 bg-green-500 text-white rounded-md px-2 w-fit py-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-green-400 focus:ring-offset-1"
+          />
+          <Button onClick={() => handleUpload(false)} disabled={loading}>
+            {loading ? "Uploading..." : "Upload"}
+          </Button>
+          <Button
+            onClick={() => handleUpload(true)}
+            variant="secondary"
+            disabled={loading}
+          >
+            Update
+          </Button>
+          <Button onClick={loadFromSupabase} variant="outline">
+            Refresh
+          </Button>
+        </div>
       </div>
 
-      {/* Display Table + Gantt Chart */}
-      <div className="border p-3 rounded-md">
+      {/* GANTT CHART */}
+      <div className="bg-card rounded-xl shadow-sm border p-4">
         {tasks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No schedule tasks available.
+          <p className="text-center text-muted-foreground py-8">
+            No schedule data available. Upload a file to get started.
           </p>
         ) : (
-          <>
-            <div className="overflow-x-auto mb-4">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="bg-muted text-xs text-muted-foreground">
-                    <th className="p-2 text-left">Task</th>
-                    <th className="p-2 text-left">Start</th>
-                    <th className="p-2 text-left">End</th>
-                    <th className="p-2 text-left">Progress</th>
-                    <th className="p-2 text-left">Dependencies</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tasks.map((t) => (
-                    <tr key={t.id} className="border-t">
-                      <td className="p-2">{t.name}</td>
-                      <td className="p-2">{String(t.start || "")}</td>
-                      <td className="p-2">{String(t.end || "")}</td>
-                      <td className="p-2">{t.progress ?? 0}%</td>
-                      <td className="p-2">{String(t.dependencies || "")}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* <div style={{ height: 400 }}>
-              <Gantt data={tasks} />
-            </div> */}
-            <div style={{ height: 400 }}>
-              <ClientGantt data={tasks} />
-            </div>
-          </>
+          <div className="h-[400px] overflow-x-auto">
+            <ClientGantt data={tasks} />
+          </div>
         )}
       </div>
+
+      {/* TASK TABLE */}
+      {tasks.length > 0 && (
+        <div className="bg-card rounded-xl shadow-sm border overflow-x-auto">
+          <table className="w-full text-sm border-collapse">
+            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase">
+              <tr>
+                <th className="p-3 text-left">Task</th>
+                <th className="p-3 text-left">Start</th>
+                <th className="p-3 text-left">End</th>
+                <th className="p-3 text-left">Progress</th>
+                <th className="p-3 text-left">Dependencies</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((t) => (
+                <tr key={t.id} className="border-t hover:bg-muted/30">
+                  <td className="p-3">{t.name}</td>
+                  <td className="p-3">{String(t.start || "")}</td>
+                  <td className="p-3">{String(t.end || "")}</td>
+                  <td className="p-3">{t.progress ?? 0}%</td>
+                  <td className="p-3">{String(t.dependencies || "")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

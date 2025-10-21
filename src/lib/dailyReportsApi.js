@@ -1,5 +1,33 @@
 import supabase from "../../lib/supabaseClinet.js";
 
+/**
+ * Fetch all daily reports with related project name
+ */
+export async function getDailyReportsWithProjectName() {
+  const { data, error } = await supabase
+    .from("daily_reports")
+    .select(
+      `
+      *,
+      projects:project_id ( projectName )
+    `
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching daily reports:", error);
+    throw error;
+  }
+
+  // Flatten projectName for easy access in frontend
+  const reports = data.map((r) => ({
+    ...r,
+    projectName: r.projects?.projectName || "Unknown Project",
+  }));
+
+  return reports;
+}
+
 // Daily Reports API
 export const dailyReportsApi = {
   // Get all daily reports
@@ -179,6 +207,7 @@ export const dailyReportsApi = {
     }
   },
 };
+
 
 // Daily Report Messages API
 export const dailyReportMessagesApi = {
