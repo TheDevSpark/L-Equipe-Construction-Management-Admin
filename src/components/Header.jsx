@@ -1,8 +1,20 @@
 "use client"
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "../context/AuthContext";
+import toast from "react-hot-toast";
 
 export default function Header({ onMenuToggle }) {
+  const { user, signOut } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast.success("Logged out successfully");
+    } catch (error) {
+      toast.error("Error logging out");
+    }
+  };
   return (
     <header className="border-b bg-background px-4 sm:px-6 py-4">
       <div className="flex items-center justify-between">
@@ -59,8 +71,8 @@ export default function Header({ onMenuToggle }) {
         <div className="flex items-center space-x-2 sm:space-x-3">
           <ThemeToggle />
 
-          {/* User Profile - Hidden on very small screens */}
-          {/* <div className="hidden sm:flex items-center space-x-2 text-muted-foreground">
+          {/* User Profile */}
+          <div className="hidden sm:flex items-center space-x-2 text-muted-foreground">
             <svg
               className="w-5 h-5"
               fill="none"
@@ -74,7 +86,18 @@ export default function Header({ onMenuToggle }) {
                 d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
               />
             </svg>
-            <span className="text-sm font-medium text-foreground">Admin</span>
+            <span className="text-sm font-medium text-foreground">
+              {user?.email ? user.email.split('@')[0] : 'Admin'}
+            </span>
+          </div>
+          
+          {/* Logout Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleLogout}
+            className="hidden sm:flex items-center gap-2"
+          >
             <svg
               className="w-4 h-4"
               fill="none"
@@ -85,14 +108,17 @@ export default function Header({ onMenuToggle }) {
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M19 9l-7 7-7-7"
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
               />
             </svg>
-          </div> */}
+            Logout
+          </Button>
           
           {/* Avatar */}
           <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-            <span className="text-primary-foreground text-sm font-medium">JM</span>
+            <span className="text-primary-foreground text-sm font-medium">
+              {user?.email ? user.email.charAt(0).toUpperCase() : 'A'}
+            </span>
           </div>
         </div>
       </div>

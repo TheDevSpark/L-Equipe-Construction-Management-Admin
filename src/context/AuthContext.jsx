@@ -11,29 +11,29 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+  // useEffect(() => {
+  //   const getUser = async () => {
+  //     const {
+  //       data: { session },
+  //     } = await supabase.auth.getSession();
 
-      setUser(session?.user || null);
-      setLoading(false);
-    };
+  //     setUser(session?.user || null);
+  //     setLoading(false);
+  //   };
 
-    getUser();
+  //   getUser();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setUser(session?.user || null);
-        if (event === "SIGNED_OUT") router.push("/auth/signin");
-      }
-    );
+  //   const { data: listener } = supabase.auth.onAuthStateChange(
+  //     async (event, session) => {
+  //       setUser(session?.user || null);
+  //       if (event === "SIGNED_OUT") router.push("/auth/signin");
+  //     }
+  //   );
 
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, [router]);
+  //   return () => {
+  //     listener.subscription.unsubscribe();
+  //   };
+  // }, [router]);
 
   return (
     <AuthContext.Provider value={{ user, loading }}>

@@ -17,7 +17,7 @@ export default function SigninPage() {
 
   // Redirect if already logged in
   if (user) {
-    router.push("/dashboard/admin");
+    router.push("/dashboard");
     return null;
   }
 
@@ -64,7 +64,7 @@ export default function SigninPage() {
     if (data) {
       console.log(user);
       toast.success("Welcome back!");
-      setTimeout(() => router.push("/dashboard/admin"), 800);
+      setTimeout(() => router.push("/dashboard"), 800);
     } else {
       console.log(data);
       toast.error("Access denied — only admins can log in.");

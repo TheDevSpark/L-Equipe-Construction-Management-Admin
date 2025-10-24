@@ -15,87 +15,155 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  // const handleSignup = async (e) => {
+  //   e.preventDefault();
+  //   setLoading(true);
+
+  //   if (password !== confirmPassword) {
+  //     toast.error("Passwords do not match");
+  //     setLoading(false);
+  //     return;
+  //   }
+
+  //   const toastId = toast.loading("Creating your account...");
+
+  //   // 1️⃣ Create user in Supabase Auth
+  //   const { data, error: signUpError } = await supabase.auth.signUp({
+  //     email,
+  //     password,
+  //     options: {
+  //       emailRedirectTo: `${location.origin}/auth/signin`,
+  //       data: {
+  //         first_name: firstName,
+  //         last_name: lastName,
+  //         phone_number: phoneNumber,
+  //       },
+  //     },
+  //   });
+
+  //   if (signUpError) {
+  //     toast.dismiss(toastId);
+  //     toast.error(signUpError.message);
+  //     setLoading(false);
+  //     return;
+  //   }
+
+  //   // 2️⃣ Insert profile record if user was created successfully
+  //   const user = data?.user;
+  //   if (user) {
+  //     const { error: insertError } = await supabase.from("profiles").insert([
+  //       {
+  //         id: user.id,
+  //         email: email,
+  //         first_name: firstName,
+  //         last_name: lastName,
+  //         phone_number: phoneNumber,
+  //         role: "admin",
+  //         created_at: new Date().toISOString(),
+  //       },
+  //     ]);
+
+  //     if (insertError) {
+  //       console.error("Error inserting profile:", insertError);
+  //       toast.dismiss(toastId);
+        
+  //       // Check if it's an RLS policy error
+  //       if (insertError.code === '42501') {
+  //         toast.error("Database permission error. Please contact administrator.");
+  //         console.log("💡 Solution: Run RLS policies in Supabase SQL Editor");
+  //       } else {
+  //         toast.error("Failed to save profile details: " + insertError.message);
+  //       }
+        
+  //       setLoading(false);
+  //       return;
+  //     }
+  //   }
+
+  //   // 3️⃣ Reset form + show success toast
+  //   setFirstName("");
+  //   setLastName("");
+  //   setEmail("");
+  //   setPhoneNumber("");
+  //   setPassword("");
+  //   setConfirmPassword("");
+  //   toast.dismiss(toastId);
+  //   toast.success(
+  //     "✅ Sign up successful! Check your email to verify your account."
+  //   );
+
+  //   setLoading(false);
+  //   setTimeout(() => router.push("/auth/signin"), 1500);
+  // };
   const handleSignup = async (e) => {
     e.preventDefault();
     setLoading(true);
-
+  
     if (password !== confirmPassword) {
       toast.error("Passwords do not match");
       setLoading(false);
       return;
     }
-
+  
     const toastId = toast.loading("Creating your account...");
-
-    // 1️⃣ Create user in Supabase Auth
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${location.origin}/auth/signin`,
-        data: {
-          first_name: firstName,
-          last_name: lastName,
-          phone_number: phoneNumber,
+  
+    try {
+      // 1️⃣ Create user in Supabase Auth
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${location.origin}/auth/signin`,
+          data: {
+            first_name: firstName,
+            last_name: lastName,
+            phone_number: phoneNumber,
+          },
         },
-      },
-    });
-
-    if (signUpError) {
+      });
+  
+      if (signUpError) throw signUpError;
+  
+      const user = authData.user;
+      if (!user) throw new Error("User creation failed");
+  
+      // 2️⃣ Insert profile in public.profiles
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .insert([
+          {
+            user_id: user.id,           // Foreign key to auth.users
+            email: email,
+            first_name: firstName,
+            last_name: lastName,
+            phone_number: phoneNumber,
+            role: "admin",              // Enum: 'admin', 'team', 'owner'
+          },
+        ]);
+  
+      if (profileError) throw profileError;
+  
       toast.dismiss(toastId);
-      toast.error(signUpError.message);
+      toast.success("✅ Sign up successful! Check your email to verify your account.");
+  
+      // Reset form
+      setFirstName("");
+      setLastName("");
+      setEmail("");
+      setPhoneNumber("");
+      setPassword("");
+      setConfirmPassword("");
+  
+      setTimeout(() => router.push("/auth/signin"), 1500);
+    } catch (error) {
+      toast.dismiss(toastId);
+      toast.error(error.message || "Something went wrong");
+      console.error(error);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // 2️⃣ Insert profile record if user was created successfully
-    const user = data?.user;
-    if (user) {
-      const { error: insertError } = await supabase.from("profiles").insert([
-        {
-          id: user.id,
-          email: email,
-          first_name: firstName,
-          last_name: lastName,
-          phone_number: phoneNumber,
-          role: "admin",
-          created_at: new Date().toISOString(),
-        },
-      ]);
-
-      if (insertError) {
-        console.error("Error inserting profile:", insertError);
-        toast.dismiss(toastId);
-        
-        // Check if it's an RLS policy error
-        if (insertError.code === '42501') {
-          toast.error("Database permission error. Please contact administrator.");
-          console.log("💡 Solution: Run RLS policies in Supabase SQL Editor");
-        } else {
-          toast.error("Failed to save profile details: " + insertError.message);
-        }
-        
-        setLoading(false);
-        return;
-      }
-    }
-
-    // 3️⃣ Reset form + show success toast
-    setFirstName("");
-    setLastName("");
-    setEmail("");
-    setPhoneNumber("");
-    setPassword("");
-    setConfirmPassword("");
-    toast.dismiss(toastId);
-    toast.success(
-      "✅ Sign up successful! Check your email to verify your account."
-    );
-
-    setLoading(false);
-    setTimeout(() => router.push("/auth/signin"), 1500);
   };
-
+  
   return (
     <div 
       className="flex items-center justify-center min-h-screen py-10"

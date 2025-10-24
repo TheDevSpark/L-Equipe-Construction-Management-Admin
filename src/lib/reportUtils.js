@@ -21,8 +21,6 @@ const FIELD_MAP = {
   issues_encountered: 'issues_encountered',
   delays_reasons: 'issues_encountered', // map old name to existing column
   safety_incidents: 'safety_incidents',
-  equipment_used: 'equipment_used',
-  materials_delivered: 'materials_delivered',
   total_workers: 'total_workers',
   total_work_hours: 'total_work_hours',
   progress_percentage: 'progress_percentage',

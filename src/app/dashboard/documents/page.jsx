@@ -527,16 +527,16 @@ const filteredDocs = documents.filter((doc) => {
         <select
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(e.target.value)}
-          className="border px-4 py-2 rounded-lg"
+          className="border border-input px-4 py-2 rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           {categories.map((cat) => (
-            <option key={cat}>{cat}</option>
+            <option key={cat} className="bg-background text-foreground">{cat}</option>
           ))}
         </select>
       </div>
 
       {/* Table */}
-      <div className="bg-white border rounded-lg shadow-sm overflow-x-auto">
+      <div className="bg-white dark:text-black border rounded-lg shadow-sm overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>

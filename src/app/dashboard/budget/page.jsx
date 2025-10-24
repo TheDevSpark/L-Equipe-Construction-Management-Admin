@@ -52,6 +52,8 @@ export default function BudgetPage() {
   const [expenses, setExpenses] = useState([]);
   const [changeOrders, setChangeOrders] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [budgetLineItems, setBudgetLineItems] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
   
   // Form States
   const [newBudget, setNewBudget] = useState({
@@ -84,8 +86,14 @@ export default function BudgetPage() {
   // Load initial data
   useEffect(() => {
     loadProjects();
-    generateMockData();
+    loadBudgetData();
   }, []);
+
+  useEffect(() => {
+    if (selectedProject) {
+      loadBudgetData();
+    }
+  }, [selectedProject]);
 
   const loadProjects = async () => {
     try {
@@ -101,85 +109,81 @@ export default function BudgetPage() {
     }
   };
 
-  const generateMockData = () => {
-    // Mock budget categories
-    setBudgetCategories([
-      { id: 1, name: "Labor", allocated: 1200000, spent: 850000, remaining: 350000 },
-      { id: 2, name: "Materials", allocated: 800000, spent: 650000, remaining: 150000 },
-      { id: 3, name: "Equipment", allocated: 400000, spent: 280000, remaining: 120000 },
-      { id: 4, name: "Subcontractors", allocated: 600000, spent: 450000, remaining: 150000 },
-      { id: 5, name: "Permits", allocated: 50000, spent: 45000, remaining: 5000 },
-      { id: 6, name: "Miscellaneous", allocated: 100000, spent: 75000, remaining: 25000 },
-    ]);
+  const loadBudgetData = async () => {
+    if (!selectedProject) return;
+    
+    setIsLoading(true);
+    try {
+      // Load budget line items from API
+      const { data: budgetData, error: budgetError } = await supabase
+        .from("project_budgets")
+        .select("*")
+        .eq("project_id", selectedProject.id)
+        .order("created_at", { ascending: false });
 
-    // Mock expenses
-    setExpenses([
-      {
-        id: 1,
-        projectId: 1,
-        category: "Labor",
-        expenseName: "Construction Workers - Week 1",
-        amount: 15000,
-        date: "2024-01-15",
-        vendor: "ABC Construction",
-        paymentStatus: "paid",
-        receipt: null,
-      },
-      {
-        id: 2,
-        projectId: 1,
-        category: "Materials",
-        expenseName: "Steel Beams",
-        amount: 25000,
-        date: "2024-01-16",
-        vendor: "Steel Corp",
-        paymentStatus: "pending",
-        receipt: null,
-      },
-    ]);
+      if (budgetError) throw budgetError;
 
-    // Mock change orders
-    setChangeOrders([
-      {
-        id: 1,
-        projectId: 1,
-        reason: "Additional foundation work required",
-        oldAmount: 450000,
-        newAmount: 520000,
-        approvedBy: "John Smith",
-        date: "2024-01-10",
-        status: "approved",
-      },
-    ]);
+      if (budgetData && budgetData.length > 0) {
+        setBudgetLineItems(budgetData);
+        
+        // Calculate totals
+        const totalPlanned = budgetData.reduce((sum, item) => sum + (item.planned || 0), 0);
+        const totalCommitted = budgetData.reduce((sum, item) => sum + (item.committed || 0), 0);
+        const totalActual = budgetData.reduce((sum, item) => sum + (item.actual || 0), 0);
+        const totalVariance = budgetData.reduce((sum, item) => sum + (item.variance || 0), 0);
 
-    // Calculate metrics
-    const totalAllocated = 3150000;
-    const totalSpent = 2095000;
-    const remaining = totalAllocated - totalSpent;
-    const percentageUsed = (totalSpent / totalAllocated) * 100;
+        setBudgetMetrics({
+          totalBudget: totalPlanned,
+          totalSpent: totalActual,
+          remaining: totalPlanned - totalActual,
+          percentageUsed: totalPlanned > 0 ? (totalActual / totalPlanned) * 100 : 0,
+        });
+      } else {
+        // No data from API, show empty state
+        setBudgetLineItems([]);
+        setBudgetMetrics({
+          totalBudget: 0,
+          totalSpent: 0,
+          remaining: 0,
+          percentageUsed: 0,
+        });
+      }
 
-    setBudgetMetrics({
-      totalBudget: totalAllocated,
-      totalSpent: totalSpent,
-      remaining: remaining,
-      percentageUsed: percentageUsed,
-    });
+      // Load change orders
+      const { data: changeOrderData, error: changeOrderError } = await supabase
+        .from("project_budgets")
+        .select("*")
+        .eq("project_id", selectedProject.id)
+        .order("created_at", { ascending: false });
+
+      if (changeOrderError) {
+        console.error("Error loading change orders:", changeOrderError);
+      } else {
+        setChangeOrders(changeOrderData || []);
+      }
+    } catch (error) {
+      console.error("Error loading budget data:", error);
+      toast.error("Failed to load budget data");
+      setBudgetLineItems([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Chart data
+  // Chart data - now dynamic based on budget line items
   const budgetChartData = {
-    labels: budgetCategories.map(cat => cat.name),
+    labels: budgetLineItems.map(item => item.category),
     datasets: [
       {
-        label: "Allocated",
-        data: budgetCategories.map(cat => cat.allocated),
+        label: "Planned",
+        data: budgetLineItems.map(item => item.planned || 0),
         backgroundColor: "rgba(59, 130, 246, 0.8)",
         borderColor: "rgba(59, 130, 246, 1)",
         borderWidth: 1,
       },
       {
-        label: "Spent",
-        data: budgetCategories.map(cat => cat.spent),
+        label: "Actual",
+        data: budgetLineItems.map(item => item.actual || 0),
         backgroundColor: "rgba(34, 197, 94, 0.8)",
         borderColor: "rgba(34, 197, 94, 1)",
         borderWidth: 1,
@@ -188,10 +192,10 @@ export default function BudgetPage() {
   };
 
   const pieChartData = {
-    labels: budgetCategories.map(cat => cat.name),
+    labels: budgetLineItems.map(item => item.category),
     datasets: [
       {
-        data: budgetCategories.map(cat => cat.spent),
+        data: budgetLineItems.map(item => item.actual || 0),
         backgroundColor: [
           "#3B82F6",
           "#10B981",
@@ -199,6 +203,10 @@ export default function BudgetPage() {
           "#EF4444",
           "#8B5CF6",
           "#06B6D4",
+          "#F97316",
+          "#84CC16",
+          "#EC4899",
+          "#6366F1",
         ],
         borderWidth: 2,
         borderColor: "#ffffff",
@@ -264,6 +272,52 @@ export default function BudgetPage() {
     }).format(amount);
   };
 
+  const exportToExcel = () => {
+    if (budgetLineItems.length === 0) {
+      toast.error("No budget data to export");
+      return;
+    }
+
+    // Create Excel data with dynamic fields
+    const excelData = [
+      ['Category', 'Planned', 'Committed', 'Actual', 'Variance', '% Complete'],
+      ...budgetLineItems.map(item => [
+        item.category || '',
+        item.planned || 0,
+        item.committed || 0,
+        item.actual || 0,
+        item.variance || 0,
+        item.percent_complete || 0
+      ]),
+      [
+        'Total',
+        budgetLineItems.reduce((sum, item) => sum + (item.planned || 0), 0),
+        budgetLineItems.reduce((sum, item) => sum + (item.committed || 0), 0),
+        budgetLineItems.reduce((sum, item) => sum + (item.actual || 0), 0),
+        budgetLineItems.reduce((sum, item) => sum + (item.variance || 0), 0),
+        '-'
+      ]
+    ];
+
+    // Convert to CSV format
+    const csvContent = excelData.map(row => 
+      row.map(cell => `"${cell}"`).join(',')
+    ).join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `budget-report-${selectedProject?.projectName || 'project'}-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast.success("Budget report exported successfully!");
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
@@ -293,65 +347,60 @@ export default function BudgetPage() {
 
       <div className="bg-card border border-border rounded-lg p-6">
         {selectedProject ? (
-          <BudgetUploader projectId={selectedProject.id} />
+          <BudgetUploader 
+            projectId={selectedProject.id} 
+            onUploadSuccess={() => {
+              loadBudgetData();
+              toast.success("Budget data uploaded successfully!");
+            }}
+          />
         ) : (
           <p className="text-sm text-muted-foreground">Select a project to view or upload budget data.</p>
         )}
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Budget</CardTitle>
-            <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+      {/* Budget & Financials Stats */}
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-foreground">Budget & Financials</h2>
+            <p className="text-muted-foreground">Track costs, commitments, and change orders</p>
+          </div>
+          <Button variant="outline" className="flex items-center gap-2" onClick={exportToExcel}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{formatCurrency(budgetMetrics.totalBudget)}</div>
-            <p className="text-xs text-muted-foreground">Approved project funds</p>
-          </CardContent>
-        </Card>
+            Export Report
+          </Button>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
-            <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{formatCurrency(budgetMetrics.totalSpent)}</div>
-            <p className="text-xs text-muted-foreground">Actual expenses incurred</p>
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card className="border-blue-200">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-blue-600">Revised Total</CardTitle>
+              <svg className="h-4 w-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+              </svg>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">$4.23M</div>
+              <p className="text-xs text-muted-foreground">Revised project budget</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Remaining</CardTitle>
-            <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{formatCurrency(budgetMetrics.remaining)}</div>
-            <p className="text-xs text-muted-foreground">Available funds</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Budget Used</CardTitle>
-            <svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">{budgetMetrics.percentageUsed.toFixed(1)}%</div>
-            <p className="text-xs text-muted-foreground">Of total budget</p>
-          </CardContent>
-        </Card>
+          <Card className="border-purple-200">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium text-purple-600">Contract Amount</CardTitle>
+              <svg className="h-4 w-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-600">$4.25M</div>
+              <p className="text-xs text-muted-foreground">Original contract value</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Navigation Tabs */}
@@ -381,65 +430,142 @@ export default function BudgetPage() {
 
       {/* Tab Content */}
       {activeTab === "overview" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="space-y-6">
           {/* Budget vs Actual Chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Budget vs Actual by Category</CardTitle>
-              <CardDescription>Compare allocated vs spent amounts</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <Bar data={budgetChartData} options={chartOptions} />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Budget vs Actual by Category</CardTitle>
+                <CardDescription>Compare planned vs actual spending</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <Bar data={budgetChartData} options={chartOptions} />
+                </div>
+              </CardContent>
+            </Card>
 
-          {/* Expense Distribution */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Expense Distribution</CardTitle>
-              <CardDescription>Spending breakdown by category</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <Doughnut data={pieChartData} options={{ responsive: true, maintainAspectRatio: false }} />
-              </div>
-            </CardContent>
-          </Card>
+            {/* Budget Distribution */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Budget Distribution</CardTitle>
+                <CardDescription>Spending breakdown by category</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <Doughnut data={pieChartData} options={{ responsive: true, maintainAspectRatio: false }} />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-          {/* Budget Categories */}
-          <Card className="lg:col-span-2">
+          {/* Budget Line Items Table */}
+          {/* <Card>
             <CardHeader>
-              <CardTitle>Budget Categories</CardTitle>
-              <CardDescription>Detailed breakdown by category</CardDescription>
+              <CardTitle>Budget Line Items</CardTitle>
+              <CardDescription>Detailed breakdown of project costs and progress</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {budgetCategories.map((category) => (
-                  <div key={category.id} className="border border-border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-semibold text-foreground">{category.name}</h3>
-                      <span className="text-sm text-muted-foreground">
-                        {((category.spent / category.allocated) * 100).toFixed(1)}% used
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm text-muted-foreground mb-2">
-                      <span>Allocated: {formatCurrency(category.allocated)}</span>
-                      <span>Spent: {formatCurrency(category.spent)}</span>
-                      <span>Remaining: {formatCurrency(category.remaining)}</span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div
-                        className="bg-primary h-2 rounded-full transition-all"
-                        style={{ width: `${(category.spent / category.allocated) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {isLoading ? (
+                <div className="text-center py-8">
+                  <div className="text-muted-foreground">Loading budget data...</div>
+                </div>
+              ) : budgetLineItems.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-3 px-4 font-medium text-foreground">Category</th>
+                        <th className="text-right py-3 px-4 font-medium text-foreground">Planned</th>
+                        <th className="text-right py-3 px-4 font-medium text-foreground">Committed</th>
+                        <th className="text-right py-3 px-4 font-medium text-foreground">Actual</th>
+                        <th className="text-right py-3 px-4 font-medium text-foreground">Variance</th>
+                        <th className="text-right py-3 px-4 font-medium text-foreground">% Complete</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {budgetLineItems.map((item) => (
+                        <tr key={item.id} className="border-b border-border">
+                          <td className="py-3 px-4 text-foreground">{item.category}</td>
+                          <td className="py-3 px-4 text-right text-foreground">{formatCurrency(item.planned || 0)}</td>
+                          <td className="py-3 px-4 text-right text-foreground">{formatCurrency(item.committed || 0)}</td>
+                          <td className="py-3 px-4 text-right text-foreground">{formatCurrency(item.actual || 0)}</td>
+                          <td className={`py-3 px-4 text-right font-medium ${
+                            (item.variance || 0) >= 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {(item.variance || 0) >= 0 ? '+' : ''}{formatCurrency(item.variance || 0)}
+                          </td>
+                          <td className="py-3 px-4 text-right text-foreground">{item.percent_complete || 0}%</td>
+                        </tr>
+                      ))}
+                      <tr className="bg-muted/50 font-semibold">
+                        <td className="py-3 px-4 text-foreground">Total</td>
+                        <td className="py-3 px-4 text-right text-foreground">
+                          {formatCurrency(budgetLineItems.reduce((sum, item) => sum + (item.planned || 0), 0))}
+                        </td>
+                        <td className="py-3 px-4 text-right text-foreground">
+                          {formatCurrency(budgetLineItems.reduce((sum, item) => sum + (item.committed || 0), 0))}
+                        </td>
+                        <td className="py-3 px-4 text-right text-foreground">
+                          {formatCurrency(budgetLineItems.reduce((sum, item) => sum + (item.actual || 0), 0))}
+                        </td>
+                        <td className="py-3 px-4 text-right text-foreground">
+                          {formatCurrency(budgetLineItems.reduce((sum, item) => sum + (item.variance || 0), 0))}
+                        </td>
+                        <td className="py-3 px-4 text-right text-foreground">-</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <div className="text-4xl mb-4">📊</div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2">
+                    No Budget Data Found
+                  </h3>
+                  <p className="text-muted-foreground mb-4">
+                    No budget line items have been created for this project yet. Upload budget data to get started.
+                  </p>
+                </div>
+              )}
             </CardContent>
-          </Card>
+          </Card> */}
+
+          {/* Change Orders Section - Only show if there are change orders */}
+          {changeOrders.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Change Orders</CardTitle>
+                <CardDescription>Approved changes to the project budget</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-3 px-4 font-medium text-foreground">CO Number</th>
+                        <th className="text-left py-3 px-4 font-medium text-foreground">Description</th>
+                        <th className="text-right py-3 px-4 font-medium text-foreground">Amount</th>
+                        <th className="text-left py-3 px-4 font-medium text-foreground">Date</th>
+                        <th className="text-left py-3 px-4 font-medium text-foreground">Approved By</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {changeOrders.map((order) => (
+                        <tr key={order.id} className="border-b border-border">
+                          <td className="py-3 px-4 text-foreground font-medium">{order.co_number || `CO-${order.id.toString().padStart(3, '0')}`}</td>
+                          <td className="py-3 px-4 text-foreground">{order.description}</td>
+                          <td className="py-3 px-4 text-right text-foreground font-medium">{formatCurrency(order.amount || 0)}</td>
+                          <td className="py-3 px-4 text-foreground">{order.date || order.created_at?.split('T')[0]}</td>
+                          <td className="py-3 px-4 text-foreground">{order.approved_by || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 
@@ -448,12 +574,9 @@ export default function BudgetPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Budget Categories</CardTitle>
-                  <CardDescription>Manage budget allocations by category</CardDescription>
-                </div>
-                <Button onClick={() => openModal("budget")}>Add Category</Button>
+              <div>
+                <CardTitle>Budget Categories</CardTitle>
+                <CardDescription>Manage budget allocations by category</CardDescription>
               </div>
             </CardHeader>
             <CardContent>
@@ -481,9 +604,6 @@ export default function BudgetPage() {
               <CardTitle>Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button className="w-full" onClick={() => openModal("budget")}>
-                Add Budget Category
-              </Button>
               <Button variant="outline" className="w-full">
                 Import Budget Template
               </Button>
@@ -593,146 +713,146 @@ export default function BudgetPage() {
             <div className="p-6">
               {modalType === "budget" && (
                 <div className="space-y-4">
-                <div>
-                  <Label htmlFor="category">Category Name</Label>
-                  <Input
-                    id="category"
-                    value={newBudget.category}
-                    onChange={(e) => setNewBudget({ ...newBudget, category: e.target.value })}
-                    placeholder="e.g., Labor, Materials"
-                  />
+                  <div>
+                    <Label htmlFor="category">Category Name</Label>
+                    <Input
+                      id="category"
+                      value={newBudget.category}
+                      onChange={(e) => setNewBudget({ ...newBudget, category: e.target.value })}
+                      placeholder="e.g., Labor, Materials"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="amount">Allocated Amount</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      value={newBudget.allocatedAmount}
+                      onChange={(e) => setNewBudget({ ...newBudget, allocatedAmount: e.target.value })}
+                      placeholder="Enter amount"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Input
+                      id="description"
+                      value={newBudget.description}
+                      onChange={(e) => setNewBudget({ ...newBudget, description: e.target.value })}
+                      placeholder="Category description"
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-3">
+                    <Button variant="outline" onClick={closeModal}>Cancel</Button>
+                    <Button onClick={handleBudgetSubmit}>Add Category</Button>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="amount">Allocated Amount</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    value={newBudget.allocatedAmount}
-                    onChange={(e) => setNewBudget({ ...newBudget, allocatedAmount: e.target.value })}
-                    placeholder="Enter amount"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Input
-                    id="description"
-                    value={newBudget.description}
-                    onChange={(e) => setNewBudget({ ...newBudget, description: e.target.value })}
-                    placeholder="Category description"
-                  />
-                </div>
-                <div className="flex justify-end space-x-3">
-                  <Button variant="outline" onClick={closeModal}>Cancel</Button>
-                  <Button onClick={handleBudgetSubmit}>Add Category</Button>
-                </div>
-              </div>
-            )}
+              )}
 
-            {modalType === "expense" && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="expenseName">Expense Name</Label>
-                  <Input
-                    id="expenseName"
-                    value={newExpense.expenseName}
-                    onChange={(e) => setNewExpense({ ...newExpense, expenseName: e.target.value })}
-                    placeholder="Enter expense name"
-                  />
+              {modalType === "expense" && (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="expenseName">Expense Name</Label>
+                    <Input
+                      id="expenseName"
+                      value={newExpense.expenseName}
+                      onChange={(e) => setNewExpense({ ...newExpense, expenseName: e.target.value })}
+                      placeholder="Enter expense name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="amount">Amount</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      value={newExpense.amount}
+                      onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
+                      placeholder="Enter amount"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="vendor">Vendor</Label>
+                    <Input
+                      id="vendor"
+                      value={newExpense.vendor}
+                      onChange={(e) => setNewExpense({ ...newExpense, vendor: e.target.value })}
+                      placeholder="Vendor name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="date">Date</Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={newExpense.date}
+                      onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="paymentStatus">Payment Status</Label>
+                    <select
+                      id="paymentStatus"
+                      value={newExpense.paymentStatus}
+                      onChange={(e) => setNewExpense({ ...newExpense, paymentStatus: e.target.value })}
+                      className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    >
+                      <option value="pending" className="bg-background text-foreground">Pending</option>
+                      <option value="paid" className="bg-background text-foreground">Paid</option>
+                      <option value="overdue" className="bg-background text-foreground">Overdue</option>
+                    </select>
+                  </div>
+                  <div className="flex justify-end space-x-3">
+                    <Button variant="outline" onClick={closeModal}>Cancel</Button>
+                    <Button onClick={handleExpenseSubmit}>Add Expense</Button>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="amount">Amount</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    value={newExpense.amount}
-                    onChange={(e) => setNewExpense({ ...newExpense, amount: e.target.value })}
-                    placeholder="Enter amount"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="vendor">Vendor</Label>
-                  <Input
-                    id="vendor"
-                    value={newExpense.vendor}
-                    onChange={(e) => setNewExpense({ ...newExpense, vendor: e.target.value })}
-                    placeholder="Vendor name"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="date">Date</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={newExpense.date}
-                    onChange={(e) => setNewExpense({ ...newExpense, date: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="paymentStatus">Payment Status</Label>
-                  <select
-                    id="paymentStatus"
-                    value={newExpense.paymentStatus}
-                    onChange={(e) => setNewExpense({ ...newExpense, paymentStatus: e.target.value })}
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="paid">Paid</option>
-                    <option value="overdue">Overdue</option>
-                  </select>
-                </div>
-                <div className="flex justify-end space-x-3">
-                  <Button variant="outline" onClick={closeModal}>Cancel</Button>
-                  <Button onClick={handleExpenseSubmit}>Add Expense</Button>
-                </div>
-              </div>
-            )}
+              )}
 
-            {modalType === "change-order" && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="reason">Reason for Change</Label>
-                  <Input
-                    id="reason"
-                    value={newChangeOrder.reason}
-                    onChange={(e) => setNewChangeOrder({ ...newChangeOrder, reason: e.target.value })}
-                    placeholder="Reason for budget change"
-                  />
+              {modalType === "change-order" && (
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="reason">Reason for Change</Label>
+                    <Input
+                      id="reason"
+                      value={newChangeOrder.reason}
+                      onChange={(e) => setNewChangeOrder({ ...newChangeOrder, reason: e.target.value })}
+                      placeholder="Reason for budget change"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="oldAmount">Old Amount</Label>
+                    <Input
+                      id="oldAmount"
+                      type="number"
+                      value={newChangeOrder.oldAmount}
+                      onChange={(e) => setNewChangeOrder({ ...newChangeOrder, oldAmount: e.target.value })}
+                      placeholder="Previous amount"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="newAmount">New Amount</Label>
+                    <Input
+                      id="newAmount"
+                      type="number"
+                      value={newChangeOrder.newAmount}
+                      onChange={(e) => setNewChangeOrder({ ...newChangeOrder, newAmount: e.target.value })}
+                      placeholder="New amount"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="approvedBy">Approved By</Label>
+                    <Input
+                      id="approvedBy"
+                      value={newChangeOrder.approvedBy}
+                      onChange={(e) => setNewChangeOrder({ ...newChangeOrder, approvedBy: e.target.value })}
+                      placeholder="Approver name"
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-3">
+                    <Button variant="outline" onClick={closeModal}>Cancel</Button>
+                    <Button onClick={handleChangeOrderSubmit}>Create Change Order</Button>
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="oldAmount">Old Amount</Label>
-                  <Input
-                    id="oldAmount"
-                    type="number"
-                    value={newChangeOrder.oldAmount}
-                    onChange={(e) => setNewChangeOrder({ ...newChangeOrder, oldAmount: e.target.value })}
-                    placeholder="Previous amount"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="newAmount">New Amount</Label>
-                  <Input
-                    id="newAmount"
-                    type="number"
-                    value={newChangeOrder.newAmount}
-                    onChange={(e) => setNewChangeOrder({ ...newChangeOrder, newAmount: e.target.value })}
-                    placeholder="New amount"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="approvedBy">Approved By</Label>
-                  <Input
-                    id="approvedBy"
-                    value={newChangeOrder.approvedBy}
-                    onChange={(e) => setNewChangeOrder({ ...newChangeOrder, approvedBy: e.target.value })}
-                    placeholder="Approver name"
-                  />
-                </div>
-                <div className="flex justify-end space-x-3">
-                  <Button variant="outline" onClick={closeModal}>Cancel</Button>
-                  <Button onClick={handleChangeOrderSubmit}>Create Change Order</Button>
-                </div>
-              </div>
-            )}
+              )}
             </div>
           </div>
         </div>

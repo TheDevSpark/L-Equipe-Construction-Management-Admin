@@ -80,17 +80,12 @@ export default function BudgetGantt({ data }) {
           <select
             value={itemsPerPage}
             onChange={handleItemsChange}
-            style={{
-              padding: "4px 8px",
-              borderRadius: "6px",
-              border: "1px solid #ccc",
-              fontSize: "14px",
-            }}
+            className="px-2 py-1 border border-input rounded-md bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 text-sm"
           >
-            <option value={5}>5</option>
-            <option value={10}>10</option>
-            <option value={20}>20</option>
-            <option value={50}>50</option>
+            <option value={5} className="bg-background text-foreground">5</option>
+            <option value={10} className="bg-background text-foreground">10</option>
+            <option value={20} className="bg-background text-foreground">20</option>
+            <option value={50} className="bg-background text-foreground">50</option>
           </select>
         </div>
 

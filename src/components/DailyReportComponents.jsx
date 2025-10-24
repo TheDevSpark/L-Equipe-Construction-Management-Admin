@@ -137,8 +137,6 @@ export function DailyReportForm({
     work_completed: reportData?.work_completed || '',
     work_in_progress: reportData?.work_in_progress || '',
     work_scheduled: reportData?.work_scheduled || '',
-    materials_used: reportData?.materials_used || '',
-    equipment_used: reportData?.equipment_used || '',
     safety_incidents: reportData?.safety_incidents || '',
     quality_issues: reportData?.quality_issues || '',
     delays_reasons: reportData?.delays_reasons || '',
@@ -201,8 +199,6 @@ export function DailyReportForm({
         work_completed: formData.work_completed,
         work_in_progress: formData.work_in_progress,
         work_scheduled: formData.work_scheduled,
-        materials_used: formData.materials_used,
-        equipment_used: formData.equipment_used,
         safety_incidents: formData.safety_incidents,
         quality_issues: formData.quality_issues,
         delays_reasons: formData.delays_reasons,
@@ -249,8 +245,6 @@ export function DailyReportForm({
         work_completed: formData.work_completed,
         work_in_progress: formData.work_in_progress,
         work_scheduled: formData.work_scheduled,
-        materials_used: formData.materials_used,
-        equipment_used: formData.equipment_used,
         safety_incidents: formData.safety_incidents,
         quality_issues: formData.quality_issues,
         delays_reasons: formData.delays_reasons,
@@ -303,12 +297,12 @@ export function DailyReportForm({
                 name="project_id"
                 value={formData.project_id}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
-                <option value="">Select Project</option>
-                <option value="__new__">-- Create new project --</option>
+                <option value="" className="bg-background text-foreground">Select Project</option>
+                <option value="__new__" className="bg-background text-foreground">-- Create new project --</option>
                 {projects.map((project) => (
-                  <option key={project.id} value={project.id}>
+                  <option key={project.id} value={project.id} className="bg-background text-foreground">
                     {project.projectName}
                   </option>
                 ))}
@@ -344,14 +338,14 @@ export function DailyReportForm({
                 name="weather_condition"
                 value={formData.weather_condition}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
               >
-                <option value="">Select Weather</option>
-                <option value="sunny">Sunny</option>
-                <option value="cloudy">Cloudy</option>
-                <option value="rainy">Rainy</option>
-                <option value="stormy">Stormy</option>
-                <option value="foggy">Foggy</option>
+                <option value="" className="bg-background text-foreground">Select Weather</option>
+                <option value="sunny" className="bg-background text-foreground">Sunny</option>
+                <option value="cloudy" className="bg-background text-foreground">Cloudy</option>
+                <option value="rainy" className="bg-background text-foreground">Rainy</option>
+                <option value="stormy" className="bg-background text-foreground">Stormy</option>
+                <option value="foggy" className="bg-background text-foreground">Foggy</option>
               </select>
             </div>
           </div>
@@ -414,60 +408,7 @@ export function DailyReportForm({
           </div>
 
           {/* Resources */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="materials_used">Materials Used</Label>
-              <textarea
-                id="materials_used"
-                name="materials_used"
-                value={formData.materials_used}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
-                rows="3"
-                placeholder="List materials used today..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="equipment_used">Equipment Used</Label>
-              <textarea
-                id="equipment_used"
-                name="equipment_used"
-                value={formData.equipment_used}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
-                rows="3"
-                placeholder="List equipment used today..."
-              />
-            </div>
-          </div>
-
-          {/* Issues and Delays */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="safety_incidents">Safety Incidents</Label>
-              <textarea
-                id="safety_incidents"
-                name="safety_incidents"
-                value={formData.safety_incidents}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
-                rows="3"
-                placeholder="Report any safety incidents..."
-              />
-            </div>
-            <div>
-              <Label htmlFor="quality_issues">Quality Issues</Label>
-              <textarea
-                id="quality_issues"
-                name="quality_issues"
-                value={formData.quality_issues}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
-                rows="3"
-                placeholder="Report any quality issues..."
-              />
-            </div>
-          </div>
+       
 
           <div>
             <Label htmlFor="delays_reasons">Delays and Reasons</Label>

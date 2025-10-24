@@ -341,13 +341,13 @@ export function TeamAssignmentModal({
                     assigned_role: e.target.value,
                   })
                 }
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 required
               >
-                <option value="">Select Role</option>
-                <option value="owner">Owner</option>
-                <option value="Client">Client</option>
-                <option value="pm">Pm</option>
+                <option value="" className="bg-background text-foreground">Select Role</option>
+                <option value="owner" className="bg-background text-foreground">Owner</option>
+                <option value="Client" className="bg-background text-foreground">Client</option>
+                <option value="pm" className="bg-background text-foreground">Pm</option>
               </select>
             </div>
 

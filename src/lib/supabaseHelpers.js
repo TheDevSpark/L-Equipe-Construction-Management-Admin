@@ -36,6 +36,15 @@ function validateUuid(u) {
   );
 }
 
+// Helper to ensure a value is a valid project ID (integer)
+export function ensureProjectId(value) {
+  if (!value) return null;
+  // Convert to integer if it's a string number
+  const intValue = parseInt(value, 10);
+  if (isNaN(intValue) || intValue <= 0) return null;
+  return intValue;
+}
+
 // Helper to ensure a value is a UUID string; if not present, generate one.
 export function ensureUuid(value) {
   if (!value) return uuidv4();
@@ -48,7 +57,7 @@ export { validateUuid };
 
 // Generic: save JSON payload for a project into a table. It inserts or updates a single
 // row per project (identified by project_id column). The table is expected to have
-// columns: id (uuid pk), project_id (uuid), data (jsonb), updated_at (timestamp).
+// columns: id (serial pk), project_id (integer), data (jsonb), updated_at (timestamp).
 export async function upsertProjectJson({
   table,
   projectId,
@@ -56,10 +65,13 @@ export async function upsertProjectJson({
   id, // optional id of existing row
 }) {
   try {
-    const project_uuid = ensureUuid(projectId);
+    const project_id = ensureProjectId(projectId);
+    if (!project_id) {
+      throw new Error("Invalid project ID");
+    }
 
     const payload = {
-      project_id: project_uuid,
+      project_id: project_id,
       data: jsonData,
       updated_at: new Date().toISOString(),
     };
@@ -89,7 +101,7 @@ export async function upsertProjectJson({
       const { data: updateData, error: updateError } = await supabase
         .from(table)
         .update(payload)
-        .eq("project_id", project_uuid)
+        .eq("project_id", project_id)
         .select()
         .maybeSingle();
       if (updateError) throw updateError;
@@ -104,15 +116,24 @@ export async function upsertProjectJson({
 
 export async function fetchProjectJson({ table, projectId }) {
   try {
-    const project_uuid = ensureUuid(projectId);
+    const project_id = ensureProjectId(projectId);
+    if (!project_id) {
+      throw new Error("Invalid project ID");
+    }
+    
     const { data, error } = await supabase
       .from(table)
       .select("*")
-      .eq("project_id", project_uuid)
-      .maybeSingle();
+      .eq("project_id", project_id)
+      .order("updated_at", { ascending: false }); // Get most recent first
 
     if (error) throw error;
-    return { data: data || null };
+    
+    // If we get an array, take the first (most recent) record
+    // If we get a single record, use it directly
+    const record = Array.isArray(data) ? data[0] : data;
+    
+    return { data: record || null };
   } catch (error) {
     console.error("fetchProjectJson error:", error);
     return { error };

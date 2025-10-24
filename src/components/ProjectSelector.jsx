@@ -58,11 +58,13 @@ export function ProjectSelector({
             value={selectedProject?.id || ""}
             onChange={(e) => handleProjectChange(e.target.value)}
             disabled={loading}
-            className="px-3 py-2 border border-input rounded-lg bg-input text-card-foreground w-full sm:min-w-[200px] lg:min-w-[250px]"
+            className="px-3 py-2 border border-input rounded-lg bg-background text-foreground w-full sm:min-w-[200px] lg:min-w-[250px] focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <option value="">{loading ? "Loading..." : "Select Project"}</option>
+            <option value="" className="bg-background text-foreground">
+              {loading ? "Loading..." : "Select Project"}
+            </option>
             {projects.map((project) => (
-              <option key={project.id} value={project.id}>
+              <option key={project.id} value={project.id} className="bg-background text-foreground">
                 {project.projectName}
               </option>
             ))}
@@ -271,13 +273,13 @@ function ProjectCreationModal({ isOpen, onClose, onProjectCreated }) {
               name="status"
               value={formData.status}
               onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
+              className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
             >
-              <option value="planning">Planning</option>
-              <option value="active">Active</option>
-              <option value="on_hold">On Hold</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="planning" className="bg-background text-foreground">Planning</option>
+              <option value="active" className="bg-background text-foreground">Active</option>
+              <option value="on_hold" className="bg-background text-foreground">On Hold</option>
+              <option value="completed" className="bg-background text-foreground">Completed</option>
+              <option value="cancelled" className="bg-background text-foreground">Cancelled</option>
             </select>
           </div>
 

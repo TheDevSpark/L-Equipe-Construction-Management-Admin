@@ -62,7 +62,7 @@ export function BudgetCategoryCard({ category, onEdit, onDelete }) {
               </span>
             </div>
             <div className="w-full bg-muted rounded-full h-2">
-              <div
+              <div  
                 className={`h-2 rounded-full transition-all ${
                   isOverBudget ? 'bg-red-500' : isNearBudget ? 'bg-yellow-500' : 'bg-primary'
                 }`}
