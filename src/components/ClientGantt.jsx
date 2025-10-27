@@ -49,9 +49,46 @@ export default function ClientGantt({ data }) {
 
   // Dynamically set height based on tasks per page
   const chartHeight = Math.max(currentTasks.length * 45 + 100, 300);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const handleFullscreen = () => {
+    const elem = document.getElementById("gantt-container");
+    if (!document.fullscreenElement) {
+      elem?.requestFullscreen();
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
+  const handlePrint = () => {
+    const printContent = document.getElementById("gantt-container");
+    const newWindow = window.open("", "_blank");
+    newWindow.document.write(`
+      <html>
+        <head>
+          <title>Project Gantt Chart</title>
+          <link rel="stylesheet" href="https://unpkg.com/gantt-task-react/dist/index.css" />
+          <style>
+            body { font-family: sans-serif; padding: 20px; }
+            .gantt-task-react-wrapper { width: 100%; }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+          <script>
+            window.onload = () => window.print();
+          </script>
+        </body>
+      </html>
+    `);
+    newWindow.document.close();
+  };
 
   return (
     <div
+      id="gantt-container"
       style={{
         display: "flex",
         flexDirection: "column",
@@ -59,9 +96,49 @@ export default function ClientGantt({ data }) {
         padding: "1rem",
         border: "1px solid #ddd",
         borderRadius: "8px",
+        background: "white",
       }}
     >
-      <div style={{ height: chartHeight }}>
+      {/* Toolbar */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "8px",
+        }}
+      >
+        <h4 style={{ fontSize: "16px", fontWeight: "600" }}>📊 Gantt Chart</h4>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            onClick={handleFullscreen}
+            style={{
+              padding: "6px 12px",
+              border: "1px solid #ccc",
+              borderRadius: "6px",
+              background: "white",
+              cursor: "pointer",
+            }}
+          >
+            {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+          </button>
+          <button
+            onClick={handlePrint}
+            style={{
+              padding: "6px 12px",
+              border: "1px solid #ccc",
+              borderRadius: "6px",
+              background: "white",
+              cursor: "pointer",
+            }}
+          >
+            🖨 Print
+          </button>
+        </div>
+      </div>
+
+      {/* Gantt Chart */}
+      <div style={{ height: chartHeight, background: "white" }}>
         <Gantt
           tasks={currentTasks}
           viewMode={ViewMode.Week}

@@ -30,6 +30,7 @@ export default function TeamsPage() {
   const [projectTeam, setProjectTeam] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -47,197 +48,65 @@ export default function TeamsPage() {
     hourly_rate: "",
   });
 
-  // Load initial data
+  // ✅ Collaborator selection states
+  const [collaboratorQuery, setCollaboratorQuery] = useState("");
+  const [showCollaboratorSuggestions, setShowCollaboratorSuggestions] =
+    useState(false);
+  const [availableCollaborators, setAvailableCollaborators] = useState([]);
+  const [selectedCollaborators, setSelectedCollaborators] = useState([]);
+
+  // Load available collaborators from Supabase
+  const getAllUsers = async () => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("role", "team");
+
+    if (error) {
+      console.error("Error fetching users:", error);
+      toast.error("Failed to load collaborators");
+    } else {
+      console.log("Users fetched:", data);
+      // Map Supabase data to collaborator format
+      const collaborators = (data || []).map((user) => ({
+        id: user.id,
+        name: `${user.full_name || ""}`.trim(),
+        email: user.email || "",
+        role: user.role || "",
+      }));
+      setAvailableCollaborators(collaborators);
+    }
+  };
+
   useEffect(() => {
-    loadProjects();
-    loadTeamMembers();
+    getAllUsers();
   }, []);
 
-  useEffect(() => {
-    if (selectedProject) {
-      loadProjectTeam();
-    }
-  }, [selectedProject]);
-
-  const loadProjects = async () => {
-    try {
-      const { data, error } = await supabase.from("project").select("*");
-      if (error) throw error;
-      setProjects(data || []);
-      if (data && data.length > 0) {
-        setSelectedProject(data[0]);
-      }
-    } catch (error) {
-      // Log error to console for debugging only
-      console.log("Error loading projects:", error?.message || "Unknown error");
-      toast.error("Failed to load projects");
-    }
-  };
-
-  const loadTeamMembers = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await teamMembersApi.getTeamMembers();
-      if (error) throw error;
-      setTeamMembers(data || []);
-    } catch (error) {
-      // Log error to console for debugging only
-      console.log(
-        "Error loading team members:",
-        error?.message || "Unknown error"
-      );
-      toast.error("Failed to load team members");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadProjectTeam = async () => {
-    if (!selectedProject) return;
-
-    try {
-      const { data, error } = await projectTeamApi.getProjectTeam(
-        selectedProject.id
-      );
-      if (error) throw error;
-      setProjectTeam(data || []);
-    } catch (error) {
-      console.log(
-        "Error loading project team:",
-        error?.message || "Unknown error"
-      );
-      toast.error("Failed to load project team");
-    }
-  };
-
-  // Generate mock data for demo
-  const generateMockData = () => {
-    const mkId = (fallback) =>
-      typeof crypto !== "undefined" && crypto.randomUUID
-        ? crypto.randomUUID()
-        : fallback;
-    const mockTeamMembers = [
-      {
-        id: mkId("00000000-0000-4000-8000-000000000101"),
-        first_name: "John",
-        last_name: "Smith",
-        email: "john.smith@company.com",
-        phone_number: "+1-555-0101",
-        role: "project_manager",
-        specialization: "Construction Management",
-        hourly_rate: 75.0,
-        availability_status: "available",
-        skills: ["Project Planning", "Team Leadership", "Budget Management"],
-        certifications: ["PMP Certification", "Safety Management"],
-        join_date: "2024-01-15",
-      },
-      {
-        id: mkId("00000000-0000-4000-8000-000000000102"),
-        first_name: "Sarah",
-        last_name: "Johnson",
-        email: "sarah.johnson@company.com",
-        phone_number: "+1-555-0102",
-        role: "engineer",
-        specialization: "Civil Engineering",
-        hourly_rate: 85.0,
-        availability_status: "available",
-        skills: ["Structural Design", "CAD", "Project Engineering"],
-        certifications: ["PE License", "AutoCAD Certified"],
-        join_date: "2024-01-20",
-      },
-      {
-        id: mkId("00000000-0000-4000-8000-000000000103"),
-        first_name: "Mike",
-        last_name: "Rodriguez",
-        email: "mike.rodriguez@company.com",
-        phone_number: "+1-555-0103",
-        role: "architect",
-        specialization: "Architecture",
-        hourly_rate: 90.0,
-        availability_status: "busy",
-        skills: ["Architectural Design", "3D Modeling", "Building Codes"],
-        certifications: ["Licensed Architect", "LEED Certified"],
-        join_date: "2024-01-10",
-      },
-      {
-        id: mkId("00000000-0000-4000-8000-000000000104"),
-        first_name: "Lisa",
-        last_name: "Chen",
-        email: "lisa.chen@company.com",
-        phone_number: "+1-555-0104",
-        role: "supervisor",
-        specialization: "Construction Supervision",
-        hourly_rate: 65.0,
-        availability_status: "available",
-        skills: ["Site Supervision", "Quality Control", "Safety Management"],
-        certifications: ["OSHA 30", "First Aid Certified"],
-        join_date: "2024-01-25",
-      },
-      {
-        id: mkId("00000000-0000-4000-8000-000000000105"),
-        first_name: "David",
-        last_name: "Wilson",
-        email: "david.wilson@company.com",
-        phone_number: "+1-555-0105",
-        role: "contractor",
-        specialization: "General Contracting",
-        hourly_rate: 70.0,
-        availability_status: "available",
-        skills: [
-          "General Construction",
-          "Subcontractor Management",
-          "Cost Estimation",
-        ],
-        certifications: ["General Contractor License"],
-        join_date: "2024-02-01",
-      },
-    ];
-
-    setTeamMembers(mockTeamMembers);
-
-    // Mock project team data
-    const projectOwnerId = mockTeamMembers[0].id;
-    const mockProjectTeam = [
-      {
-        id: mkId("00000000-0000-4000-8000-000000000201"),
-        team_member_id: mockTeamMembers[0].id,
-        assigned_role: "project_manager",
-        hourly_rate: 75.0,
-        allocation_percentage: 100,
-        status: "active",
-        start_date: "2024-01-15",
-        project_members: mockTeamMembers[0],
-      },
-      {
-        id: mkId("00000000-0000-4000-8000-000000000202"),
-        team_member_id: mockTeamMembers[1].id,
-        assigned_role: "lead_engineer",
-        hourly_rate: 85.0,
-        allocation_percentage: 80,
-        status: "active",
-        start_date: "2024-01-20",
-        project_members: mockTeamMembers[1],
-      },
-    ];
-
-    setProjectTeam(mockProjectTeam);
-  };
-
-  // Initialize with mock data
-  useEffect(() => {
-    generateMockData();
-  }, []);
-
-  const filteredTeamMembers = teamMembers.filter(
-    (member) =>
-      `${member.first_name} ${member.last_name}`
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      member.specialization.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.role.toLowerCase().includes(searchTerm.toLowerCase())
+  // Filter collaborators based on search input
+  const filteredCollaborators = availableCollaborators.filter(
+    (collab) =>
+      collab.name.toLowerCase().includes(collaboratorQuery.toLowerCase()) &&
+      !selectedCollaborators.some((sel) => sel.id === collab.id)
   );
 
-  const totalTeamCost = teamUtils.calculateTeamCost(projectTeam);
+  const handleCollaboratorSelect = (collaborator) => {
+    setSelectedCollaborators((prev) => [...prev, collaborator]);
+    setCollaboratorQuery("");
+    setShowCollaboratorSuggestions(false);
+  };
+
+  const handleCollaboratorRemove = (collaboratorId) => {
+    setSelectedCollaborators((prev) =>
+      prev.filter((c) => c.id !== collaboratorId)
+    );
+  };
+
+  const handleCollaboratorInputChange = (e) => {
+    setCollaboratorQuery(e.target.value);
+    setShowCollaboratorSuggestions(e.target.value.trim().length > 0);
+  };
+
+  // ... rest of your existing code (loadProjects, loadTeamMembers, etc.)
 
   const openModal = (type, member = null) => {
     setModalType(type);
@@ -255,92 +124,15 @@ export default function TeamsPage() {
         hourly_rate: member.hourly_rate || "",
       });
     }
-  };
 
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setModalType("");
-    setSelectedMember(null);
-    setNewMember({
-      first_name: "",
-      last_name: "",
-      email: "",
-      phone_number: "",
-      role: "",
-      specialization: "",
-      hourly_rate: "",
-      skills: [],
-      certifications: [],
-    });
-  };
-
-  const handleAddMember = async () => {
-    try {
-      const { data, error } = await teamMembersApi.createTeamMember({
-        ...newMember,
-        hourly_rate: parseFloat(newMember.hourly_rate),
-        created_by: "current-user-id", // Replace with actual user ID
-      });
-
-      if (error) throw error;
-
-      toast.success("Team member added successfully!");
-      loadTeamMembers();
-      closeModal();
-    } catch (error) {
-      toast.error("Failed to add team member");
+    // Reset collaborators when opening modal
+    if (type === "add-member") {
+      setSelectedCollaborators([]);
+      setCollaboratorQuery("");
     }
   };
 
-  const handleUpdateMember = async () => {
-    try {
-      const { data, error } = await teamMembersApi.updateTeamMember(
-        selectedMember.id,
-        {
-          ...newMember,
-          hourly_rate: parseFloat(newMember.hourly_rate),
-        }
-      );
-
-      if (error) throw error;
-
-      toast.success("Team member updated successfully!");
-      loadTeamMembers();
-      closeModal();
-    } catch (error) {
-      toast.error("Failed to update team member");
-    }
-  };
-
-  const handleDeleteMember = async (member) => {
-    if (
-      window.confirm(
-        `Are you sure you want to delete ${teamUtils.formatTeamMemberName(
-          member.first_name,
-          member.last_name
-        )}?`
-      )
-    ) {
-      try {
-        const { error } = await teamMembersApi.deleteTeamMember(member.id);
-        if (error) throw error;
-
-        toast.success("Team member deleted successfully!");
-        loadTeamMembers();
-      } catch (error) {
-        toast.error("Failed to delete team member");
-      }
-    }
-  };
-
-  const handleAssignMember = (member) => {
-    toast.success(
-      `Assign ${teamUtils.formatTeamMemberName(
-        member.first_name,
-        member.last_name
-      )} modal would open here`
-    );
-  };
+  // ... rest of your existing functions (handleAddMember, handleUpdateMember, etc.)
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -372,263 +164,14 @@ export default function TeamsPage() {
         </div>
       </div>
 
-      {/* Project Info */}
-      <ProjectInfoCard project={selectedProject} />
-
-      {/* Navigation Tabs */}
-      <div className="flex flex-wrap gap-1 bg-muted p-1 rounded-lg w-full sm:w-fit">
-        {[
-          { id: "members", label: "Team Members", shortLabel: "Members" },
-          {
-            id: "assignments",
-            label: "Project Assignments",
-            shortLabel: "Assignments",
-          },
-          {
-            id: "availability",
-            label: "Availability",
-            shortLabel: "Availability",
-          },
-          {
-            id: "skills",
-            label: "Skills & Certifications",
-            shortLabel: "Skills",
-          },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-2 sm:px-4 py-2 rounded-md text-sm font-medium transition-colors flex-1 sm:flex-none ${
-              activeTab === tab.id
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span className="hidden sm:inline">{tab.label}</span>
-            <span className="sm:hidden">{tab.shortLabel}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Team Members Tab */}
-      {activeTab === "members" && (
-        <div className="space-y-6">
-          {/* Search and Add */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Input
-                type="text"
-                placeholder="Search team members..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-64"
-              />
-            </div>
-            <Button onClick={() => openModal("add-member")}>
-              Add Team Member
-            </Button>
-          </div>
-
-          {/* Team Statistics */}
-          <TeamStatistics teamMembers={teamMembers} totalCost={totalTeamCost} />
-
-          {/* Team Members Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredTeamMembers.map((member) => (
-              <TeamMemberCard
-                key={member.id}
-                teamMember={member}
-                onEdit={(member) => openModal("edit-member", member)}
-                onDelete={handleDeleteMember}
-                onAssign={handleAssignMember}
-              />
-            ))}
-          </div>
-
-          {filteredTeamMembers.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-muted-foreground">
-                {searchTerm
-                  ? "No team members found matching your search."
-                  : "No team members found."}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Project Assignments Tab */}
-      {activeTab === "assignments" && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-foreground">
-                Project Team:{" "}
-                {selectedProject?.projectName || "Select a Project"}
-              </h2>
-              <p className="text-muted-foreground">
-                Manage team assignments for the selected project
-              </p>
-            </div>
-            <Button
-              onClick={() =>
-                toast.success("Assign Team Member modal would open here")
-              }
-            >
-              Assign Team Member
-            </Button>
-          </div>
-
-          {selectedProject && (
-            <>
-              {/* Project Team Statistics */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      Team Size
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      {projectTeam.length}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Assigned members
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      Estimated Cost
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">
-                      ${totalTeamCost.toFixed(0)}
-                    </div>
-                    <p className="text-xs text-muted-foreground">Per hour</p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium">
-                      Active Members
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold text-green-600">
-                      {
-                        projectTeam.filter(
-                          (member) => member.status === "active"
-                        ).length
-                      }
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {
-                        projectTeam.filter(
-                          (member) => member.status !== "active"
-                        ).length
-                      }{" "}
-                      inactive
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Project Team Members */}
-              <div className="space-y-4">
-                {projectTeam.map((assignment) => (
-                  <Card
-                    key={assignment.id}
-                    className="hover:shadow-md transition-shadow"
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-primary text-primary-foreground rounded-full flex items-center justify-center font-semibold">
-                            {teamUtils.getInitials(
-                              assignment.project_members.first_name,
-                              assignment.project_members.last_name
-                            )}
-                          </div>
-                          <div>
-                            <h3 className="font-semibold text-foreground">
-                              {teamUtils.formatTeamMemberName(
-                                assignment.project_members.first_name,
-                                assignment.project_members.last_name
-                              )}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              {assignment.project_members.email}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center space-x-4">
-                          <div className="text-right">
-                            <div className="text-sm font-medium">
-                              ${assignment.hourly_rate}/hr
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {assignment.allocation_percentage}% allocation
-                            </div>
-                          </div>
-                          <div className="flex flex-col space-y-1">
-                            <Button variant="outline" size="sm">
-                              Edit
-                            </Button>
-                            <Button variant="outline" size="sm">
-                              Remove
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-3 flex items-center justify-between">
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${teamUtils.getRoleColor(
-                            assignment.assigned_role
-                          )}`}
-                        >
-                          {assignment.assigned_role
-                            .replace("_", " ")
-                            .toUpperCase()}
-                        </span>
-                        <span
-                          className={`px-2 py-1 rounded-full text-xs font-medium ${teamUtils.getAvailabilityColor(
-                            assignment.status
-                          )}`}
-                        >
-                          {assignment.status.toUpperCase()}
-                        </span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-
-              {projectTeam.length === 0 && (
-                <div className="text-center py-12">
-                  <div className="text-muted-foreground">
-                    No team members assigned to this project yet.
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
+      {/* ... rest of your existing JSX ... */}
 
       {/* Add/Edit Member Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-card text-card-foreground rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl border">
             <div className="flex items-center justify-between p-4">
-              <h3 className="text-xl font-semibold text-card-foreground p-4">
+              <h3 className="text-xl font-semibold text-card-foreground">
                 {modalType === "add-member"
                   ? "Add Team Member"
                   : "Edit Team Member"}
@@ -665,6 +208,7 @@ export default function TeamsPage() {
                 }}
                 className="space-y-4"
               >
+                {/* Basic Info Fields */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="first_name">First Name</Label>
@@ -734,10 +278,33 @@ export default function TeamsPage() {
                     className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                     required
                   >
-                    <option value="" className="bg-background text-foreground">Select Role</option>
-                    <option value="lead" className="bg-background text-foreground">Lead</option>
-                    <option value="logistics" className="bg-background text-foreground">Logistics</option>
-                    <option value="pm" className="bg-background text-foreground">Assistant PM</option>
+                    <option value="" className="bg-background text-foreground">
+                      Select Role
+                    </option>
+                    <option
+                      value="project_manager"
+                      className="bg-background text-foreground"
+                    >
+                      Project Manager
+                    </option>
+                    <option
+                      value="lead"
+                      className="bg-background text-foreground"
+                    >
+                      Lead
+                    </option>
+                    <option
+                      value="logistics"
+                      className="bg-background text-foreground"
+                    >
+                      Logistics
+                    </option>
+                    <option
+                      value="assistant_pm"
+                      className="bg-background text-foreground"
+                    >
+                      Assistant PM
+                    </option>
                   </select>
                 </div>
 
@@ -771,8 +338,114 @@ export default function TeamsPage() {
                   />
                 </div>
 
+                {/* ✅ Collaborator Selection - Only show in add member mode */}
+                {modalType === "add-member" && (
+                  <div>
+                    <Label htmlFor="collaborators">Collaborators</Label>
+                    <div className="relative">
+                      <Input
+                        type="text"
+                        value={collaboratorQuery}
+                        onChange={handleCollaboratorInputChange}
+                        onFocus={() =>
+                          setShowCollaboratorSuggestions(
+                            collaboratorQuery.length > 0
+                          )
+                        }
+                        placeholder="Search and select collaborators..."
+                        className="w-full"
+                      />
+
+                      {/* Searchable Dropdown */}
+                      {showCollaboratorSuggestions &&
+                        filteredCollaborators.length > 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-card border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                            {filteredCollaborators.map((collab) => (
+                              <div
+                                key={collab.id}
+                                onClick={() => handleCollaboratorSelect(collab)}
+                                className="px-3 py-2 hover:bg-accent cursor-pointer flex items-center justify-between"
+                              >
+                                <div>
+                                  <div className="font-medium text-card-foreground">
+                                    {collab.name}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {collab.email}
+                                  </div>
+                                </div>
+                                <svg
+                                  className="w-4 h-4 text-muted-foreground"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                                  />
+                                </svg>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                      {/* No results message */}
+                      {showCollaboratorSuggestions &&
+                        collaboratorQuery.length > 0 &&
+                        filteredCollaborators.length === 0 && (
+                          <div className="absolute z-10 w-full mt-1 bg-card border border-input rounded-lg shadow-lg px-3 py-2 text-muted-foreground">
+                            No collaborators found
+                          </div>
+                        )}
+                    </div>
+
+                    {/* Selected Collaborators */}
+                    {selectedCollaborators.length > 0 && (
+                      <div className="mt-3">
+                        <div className="text-sm font-medium text-card-foreground mb-2">
+                          Selected Collaborators:
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedCollaborators.map((collab) => (
+                            <div
+                              key={collab.id}
+                              className="px-3 py-1 bg-primary text-primary-foreground rounded-full text-sm flex items-center space-x-2"
+                            >
+                              <span>{collab.name}</span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleCollaboratorRemove(collab.id)
+                                }
+                                className="hover:bg-primary-foreground/20 rounded-full p-0.5"
+                              >
+                                <svg
+                                  className="w-3 h-3"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M6 18L18 6M6 6l12 12"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex justify-end space-x-3 pt-4">
-                  <Button variant="outline" onClick={closeModal}>
+                  <Button type="button" variant="outline" onClick={closeModal}>
                     Cancel
                   </Button>
                   <Button type="submit">

@@ -621,6 +621,7 @@ export default function BudgetUploader({ projectId }) {
       });
 
       if (error) throw error;
+      console.log(data);
 
       setBudgetRecord(data);
       setBudgetData(data?.data || []);
@@ -644,58 +645,46 @@ export default function BudgetUploader({ projectId }) {
 
     setLoading(true);
     try {
-      const rows = await parseExcelFileFirstSheet(file);
+      // 🧩 Step 1: Parse Excel file
+      const parsed = await parseExcelFileFirstSheet(file);
 
-      // 🧠 Find the real header row (the one containing 'TRADER /VENDOR NAME')
-      let headerIndex = rows.findIndex((r) =>
-        Object.values(r).some((v) =>
-          String(v || "")
-            .toUpperCase()
-            .includes("TRADER")
-        )
-      );
+      // 🧠 Step 2: Detect if wrapped in a sheet object (like { "Sheet1": [...] })
+      const rows = Array.isArray(parsed)
+        ? parsed
+        : parsed[Object.keys(parsed)[0]] || [];
 
-      if (headerIndex === -1) headerIndex = 0;
+      if (!Array.isArray(rows) || rows.length === 0) {
+        throw new Error("No valid data found in Excel file");
+      }
 
-      const headerRow = rows[headerIndex];
-      const headers = Object.values(headerRow)
-        .map((h) => String(h || "").trim())
-        .filter((h) => h && !h.startsWith("__EMPTY"));
-
-      // 🧹 Get only the data rows after the header row
-      const dataRows = rows.slice(headerIndex + 1);
-
-      // 🔄 Convert to structured JSON
-      const converted = dataRows.map((r, idx) => {
+      // 🧹 Step 3: Clean and normalize each row
+      const cleaned = rows.map((r, idx) => {
         const obj = { id: `b-${idx}` };
-        const values = Object.values(r);
-        headers.forEach((h, i) => {
-          const value = values[i];
-          obj[h] =
-            value === null ||
-            value === undefined ||
-            value === "" ||
-            value === "null"
+        for (const key in r) {
+          const cleanKey = String(key).trim();
+          obj[cleanKey] =
+            r[key] === null || r[key] === undefined || r[key] === ""
               ? "--"
-              : value;
-        });
+              : r[key];
+        }
         return obj;
       });
 
-      // 🚀 Upload to Supabase
+      // 🚀 Step 4: Upload to Supabase
       const { data, error } = await upsertProjectJson({
         table: "project_budgets",
         projectId,
-        jsonData: converted,
+        jsonData: cleaned,
         id: replace ? recordId : undefined,
       });
+
       if (error) throw error;
 
-      toast.success("Budget saved");
-      setBudgetData(converted);
+      toast.success("Budget saved successfully");
+      setBudgetData(cleaned);
       setRecordId(data?.id || recordId);
     } catch (err) {
-      console.error(err);
+      console.error("Upload error:", err);
       toast.error("Failed to process file");
     } finally {
       setLoading(false);
@@ -775,37 +764,101 @@ export default function BudgetUploader({ projectId }) {
           </Button>
         </div>
       </div>
-
       {/* TABLE */}
       {budgetData.length > 0 && (
-        <div className="bg-card rounded-xl shadow-sm border overflow-x-auto">
-          {/* <div className="p-4 border-b bg-muted/20">
+        <div className="bg-card rounded-xl shadow-sm border overflow-x-auto p-4">
+          <div className="flex items-center justify-between mb-3">
             <h3 className="font-medium text-sm text-muted-foreground">
               📋 Detailed Budget List ({budgetData.length} items)
             </h3>
-          </div> */}
-          <table className="w-full text-sm border-collapse">
-            <thead className="bg-muted/50 text-xs text-muted-foreground uppercase">
-              <tr>
-                {Object.keys(budgetData[0]).map((key) => (
-                  <th key={key} className="p-3 text-left">
-                    {key}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {budgetData.map((row, i) => (
-                <tr key={i} className="border-t hover:bg-muted/30">
-                  {Object.values(row).map((value, j) => (
-                    <td key={j} className="p-3 whitespace-nowrap">
-                      {String(value)}
-                    </td>
+            <Button
+              onClick={() => {
+                const printContent = document.getElementById("budget-table");
+                const win = window.open("", "", "width=900,height=700");
+                win.document.write(`
+            <html>
+              <head>
+                <title>Project Budget</title>
+                <style>
+                  body { font-family: Arial, sans-serif; padding: 20px; }
+                  table { width: 100%; border-collapse: collapse; }
+                  th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+                  th { background-color: #f5f5f5; }
+                </style>
+              </head>
+              <body>
+                ${printContent.outerHTML}
+              </body>
+            </html>
+          `);
+                win.document.close();
+                win.print();
+              }}
+              variant="outline"
+            >
+              🖨️ Print Table
+            </Button>
+          </div>
+
+          <div id="budget-table">
+            <table className="w-full text-sm border-collapse">
+              <thead className="bg-muted/50 text-xs text-muted-foreground uppercase">
+                <tr>
+                  {Object.keys(budgetData[0]).map((key) => (
+                    <th key={key} className="p-3 text-left">
+                      {key}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {budgetData.map((row, i) => (
+                  <tr key={i} className="border-t hover:bg-muted/30">
+                    {Object.entries(row).map(([key, value], j) => {
+                      let displayValue = value;
+
+                      if (
+                        value === null ||
+                        value === undefined ||
+                        value === "--"
+                      ) {
+                        displayValue = "--";
+                      } else if (String(key).includes("%")) {
+                        displayValue = `${(Number(value) * 100).toFixed(1)}%`;
+                      } else if (
+                        typeof value === "number" ||
+                        (!isNaN(value) && value !== "" && value !== null)
+                      ) {
+                        if (
+                          key.toLowerCase().includes("amount") ||
+                          key.toLowerCase().includes("contract") ||
+                          key.toLowerCase().includes("paid") ||
+                          key.toLowerCase().includes("balance") ||
+                          key.toLowerCase().includes("total")
+                        ) {
+                          displayValue = new Intl.NumberFormat("en-US", {
+                            style: "currency",
+                            currency: "USD",
+                            minimumFractionDigits: 0,
+                          }).format(Number(value));
+                        } else {
+                          displayValue = new Intl.NumberFormat("en-US").format(
+                            Number(value)
+                          );
+                        }
+                      }
+
+                      return (
+                        <td key={j} className="p-3 whitespace-nowrap">
+                          {displayValue}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

@@ -1,4 +1,4 @@
-import supabase from "../../lib/supabaseClinet.js";
+import supabase from "../../lib/supabaseClinet";
 
 // Lightweight uuid v4 generator (browser-friendly) and validator
 function uuidv4() {
@@ -92,7 +92,7 @@ export async function upsertProjectJson({
     // Using insert().upsert is not directly available in supabase-js; we emulate by trying insert and then update on conflict
     const { data: insertData, error: insertError } = await supabase
       .from(table)
-      .insert([{...payload }])
+      .insert([{ ...payload }])
       .select()
       .maybeSingle();
     if (insertError) {
@@ -120,7 +120,7 @@ export async function fetchProjectJson({ table, projectId }) {
     if (!project_id) {
       throw new Error("Invalid project ID");
     }
-    
+
     const { data, error } = await supabase
       .from(table)
       .select("*")
@@ -128,11 +128,11 @@ export async function fetchProjectJson({ table, projectId }) {
       .order("updated_at", { ascending: false }); // Get most recent first
 
     if (error) throw error;
-    
+
     // If we get an array, take the first (most recent) record
     // If we get a single record, use it directly
     const record = Array.isArray(data) ? data[0] : data;
-    
+
     return { data: record || null };
   } catch (error) {
     console.error("fetchProjectJson error:", error);

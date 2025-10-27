@@ -1,8 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import supabase from "../../lib/supabaseClinet";
 import { useRouter } from "next/navigation";
+import supabase from "../../lib/supabaseClinet";
 
 const AuthContext = createContext();
 
@@ -11,33 +11,27 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  // useEffect(() => {
-  //   const getUser = async () => {
-  //     const {
-  //       data: { session },
-  //     } = await supabase.auth.getSession();
+  useEffect(() => {
+    const initAuth = async () => {
+      const { data } = await supabase.auth.getSession();
+      setUser(data.session?.user ?? null);
+      setLoading(false);
+    };
+    initAuth();
 
-  //     setUser(session?.user || null);
-  //     setLoading(false);
-  //   };
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+        if (_event === "SIGNED_OUT") router.push("/auth/signin");
+      }
+    );
 
-  //   getUser();
-
-  //   const { data: listener } = supabase.auth.onAuthStateChange(
-  //     async (event, session) => {
-  //       setUser(session?.user || null);
-  //       if (event === "SIGNED_OUT") router.push("/auth/signin");
-  //     }
-  //   );
-
-  //   return () => {
-  //     listener.subscription.unsubscribe();
-  //   };
-  // }, [router]);
+    return () => listener.subscription.unsubscribe();
+  }, [router]);
 
   return (
     <AuthContext.Provider value={{ user, loading }}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 }
@@ -45,7 +39,7 @@ export function AuthProvider({ children }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }

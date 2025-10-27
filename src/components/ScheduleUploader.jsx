@@ -94,14 +94,19 @@ export default function ScheduleUploader({ projectId }) {
     try {
       // Step 1: Parse Excel
       const rows = await parseExcelFileFirstSheet(file);
+      const excelDateToJS = (excelDate) => {
+        if (!excelDate || isNaN(excelDate)) return null;
+        // Excel’s day 1 = 1900-01-01
+        const jsDate = new Date((excelDate - 25569) * 86400 * 1000);
+        return jsDate.toISOString().split("T")[0]; // YYYY-MM-DD
+      };
 
-      // Step 2: Convert Excel rows → Gantt format
       const converted = rows.map((r, i) => ({
-        id: r.id || `task-${i}`, // internal key for chart only (not DB id)
+        id: r.id || `task-${i}`,
         name:
           r.name || r.Task || r["Task Name"] || r.task_name || `Task ${i + 1}`,
-        start: r.start || r.Start || r["Planned Start Date"] || null,
-        end: r.end || r.End || r["Planned Finish Date"] || null,
+        start: excelDateToJS(r.start || r.Start || r["Planned Start Date"]),
+        end: excelDateToJS(r.end || r.End || r["Planned Finish Date"]),
         progress: Number(
           r.progress || r.Progress || r["Percent Complete"] || 0
         ),
@@ -273,7 +278,7 @@ export default function ScheduleUploader({ projectId }) {
       )}
 
       {/* GANTT CHART */}
-      <div className="bg-card rounded-xl shadow-sm border p-4">
+      <div className="bg-card rounded-xl shadow-sm border p-4 max-w-screen">
         {tasks.length === 0 ? (
           <div className="text-center py-8">
             <div className="text-4xl mb-4">📊</div>
@@ -366,8 +371,28 @@ export default function ScheduleUploader({ projectId }) {
               {tasks.map((t) => (
                 <tr key={t.id} className="border-t hover:bg-muted/30">
                   <td className="p-3 font-medium">{t.name}</td>
-                  <td className="p-3">{String(t.start || "")}</td>
-                  <td className="p-3">{String(t.end || "")}</td>
+                  <td className="p-3">
+                    {t.start && !isNaN(t.start)
+                      ? new Date(
+                          (t.start - 25569) * 86400 * 1000
+                        ).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })
+                      : t.start || ""}
+                  </td>
+                  <td className="p-3">
+                    {t.end && !isNaN(t.end)
+                      ? new Date(
+                          (t.end - 25569) * 86400 * 1000
+                        ).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })
+                      : t.end || ""}
+                  </td>
                   <td className="p-3">
                     <div className="flex items-center gap-2">
                       <span>{t.progress ?? 0}%</span>

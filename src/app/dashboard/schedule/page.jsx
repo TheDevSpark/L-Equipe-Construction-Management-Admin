@@ -30,12 +30,16 @@ export default function SchedulePage() {
   };
 
   return (
-    <div>
+    <div className="max-w-[80vw] overflow-hidden">
       {/* Project Selection */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-6 ">
         <div className="flex-1">
-          <h1 className="text-3xl lg:text-4xl font-bold text-foreground mb-2">Schedule</h1>
-          <p className="text-muted-foreground">Project scheduling and timeline management</p>
+          <h1 className="text-3xl lg:text-4xl font-bold text-foreground mb-2">
+            Schedule
+          </h1>
+          <p className="text-muted-foreground">
+            Project scheduling and timeline management
+          </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:gap-4">
           <div className="flex-1 lg:flex-none">
@@ -60,7 +64,9 @@ export default function SchedulePage() {
         {selectedProject ? (
           <ScheduleUploader projectId={selectedProject.id} />
         ) : (
-          <p className="text-sm text-muted-foreground">Select a project to view or upload a schedule.</p>
+          <p className="text-sm text-muted-foreground">
+            Select a project to view or upload a schedule.
+          </p>
         )}
       </div>
     </div>

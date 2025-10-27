@@ -208,7 +208,6 @@ export const dailyReportsApi = {
   },
 };
 
-
 // Daily Report Messages API
 export const dailyReportMessagesApi = {
   // Get messages for a report
@@ -216,11 +215,11 @@ export const dailyReportMessagesApi = {
     try {
       const { data, error } = await supabase
         .from("daily_report_messages")
-        .select("*,auth.users(email,raw_user_meta_data)")
+        .select("*")
         .eq("report_id", reportId)
         .order("created_at", { ascending: true });
 
-      if (error) throw error;
+      if (error) throw error.message;
       return { data, error: null };
     } catch (error) {
       console.error("Error fetching report messages:", error);

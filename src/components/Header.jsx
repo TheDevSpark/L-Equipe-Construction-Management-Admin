@@ -4,14 +4,19 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import Image from "next/image";
-
+import { signOut } from "../utils/helpers";
+import { useRouter } from "next/navigation";
 export default function Header({ onMenuToggle }) {
-  const { user, signOut } = useAuth();
-
+  const { user } = useAuth();
+  const router = useRouter();
   const handleLogout = async () => {
     try {
-      await signOut();
+      console.log("sign out");
+
+      signOut();
+      router.push("/auth/signin");
       toast.success("Logged out successfully");
+      router;
     } catch (error) {
       toast.error("Error logging out");
     }
