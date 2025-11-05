@@ -15,6 +15,7 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import toast from "react-hot-toast";
+import Link from "next/link";
 
 ChartJS.register(
   CategoryScale,
@@ -52,6 +53,7 @@ export default function AdminPage() {
   });
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Helper function to convert Excel serial date to JavaScript Date
   const excelDateToJSDate = (serial) => {
@@ -101,6 +103,9 @@ export default function AdminPage() {
     if (!selectedProject?.id) return;
 
     const makeSummary = async () => {
+      setIsLoading(true);
+      setIsDataLoaded(false);
+
       try {
         const project_id = selectedProject.id;
 
@@ -153,7 +158,7 @@ export default function AdminPage() {
           toast.error("Error getting schedule info: " + scheduleError.message);
           return;
         }
-        const schedule = scheduleData[0].data;
+        const schedule = scheduleData[0]?.data || [];
         const { data: budgetSummary, error: budgetSummaryError } =
           await supabase
             .from("project_budgets")
@@ -165,7 +170,7 @@ export default function AdminPage() {
           );
           return;
         }
-        const budgetSummaryData = budgetSummary[0].data;
+        const budgetSummaryData = budgetSummary[0]?.data || [];
 
         setSummary({
           total_daily_reports,
@@ -178,6 +183,9 @@ export default function AdminPage() {
       } catch (err) {
         console.error("Unexpected summary error:", err);
         toast.error("Failed to fetch summary data.");
+      } finally {
+        setIsLoading(false);
+        setIsDataLoaded(true);
       }
     };
 
@@ -312,22 +320,25 @@ export default function AdminPage() {
     setDailyReports(dailyReportsData);
 
     // Budget Data for Chart from actual budget summary
-    const budgetLabels =
-      summary.budgetSummaryData
-        ?.slice(0, 5)
-        .map((item) => item["TRADER /VENDOR NAME"]) || [];
+    const validBudgetItems =
+      summary.budgetSummaryData?.filter(
+        (item) =>
+          item &&
+          item["Contract Amount"] !== undefined &&
+          item["Remaining Balanc"] !== undefined
+      ) || [];
 
-    const plannedData =
-      summary.budgetSummaryData
-        ?.slice(0, 5)
-        .map((item) => item["Contract Amount"] || 0) || [];
+    const budgetLabels = validBudgetItems
+      .slice(0, 5)
+      .map((item) => item["TRADER /VENDOR NAME"] || "Unknown Vendor");
 
-    const actualData =
-      summary.budgetSummaryData
-        ?.slice(0, 5)
-        .map(
-          (item) => item["Contract Amount"] - item["Remaining Balanc"] || 0
-        ) || [];
+    const plannedData = validBudgetItems
+      .slice(0, 5)
+      .map((item) => item["Contract Amount"] || 0);
+
+    const actualData = validBudgetItems
+      .slice(0, 5)
+      .map((item) => item["Contract Amount"] - item["Remaining Balanc"] || 0);
 
     setBudgetData({
       labels: budgetLabels,
@@ -348,27 +359,9 @@ export default function AdminPage() {
         },
       ],
     });
-
-    // Team Metrics Data
-    setTeamMetrics({
-      totalUsers: 23,
-      admins: 8,
-      members: 15,
-      activeSubcontractors: 12,
-      onSiteSubcontractors: summary.teamMembers || 0,
-      tasksAssigned: summary.schedule?.length || 0,
-      completedTasks:
-        summary.schedule?.filter((task) => task.progress === 100)?.length || 0,
-      documents: 247,
-      storageUsed: "12.4 GB",
-    });
-
-    // Mark data as loaded
-    setIsDataLoaded(true);
   }, [summary]);
 
   // Chart options with money formatting
-  // Chart options with money formatting and increased height
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -394,7 +387,10 @@ export default function AdminPage() {
       y: {
         beginAtZero: true,
         suggestedMax:
-          Math.max(...budgetData.datasets.flatMap((d) => d.data)) * 1.2, // Add 20% more range
+          budgetData.datasets.length > 0 &&
+          Math.max(...budgetData.datasets.flatMap((d) => d.data)) > 0
+            ? Math.max(...budgetData.datasets.flatMap((d) => d.data)) * 1.2
+            : 1000, // Default range if no data
         ticks: {
           callback: function (value) {
             return formatMoney(value);
@@ -421,13 +417,10 @@ export default function AdminPage() {
     },
   };
 
-  // Handle approval actions
-  const handleApproval = (id, action) => {
-    setPendingApprovals((prev) =>
-      prev.filter((approval) => approval.id !== id)
-    );
-  };
-
+  useEffect(()=>{
+    console.log(summary);
+    
+  },[summary])
   // Create Project modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
@@ -527,8 +520,36 @@ export default function AdminPage() {
     );
   };
 
+  // Empty state components
+  const EmptyState = ({ icon, title, description, action }) => (
+    <div className="text-center py-8">
+      <div className="text-4xl mb-4">{icon}</div>
+      <h4 className="font-medium text-gray-800 mb-2">{title}</h4>
+      <p className="text-gray-500 mb-4">{description}</p>
+      {action}
+    </div>
+  );
+
+  // Loading component
+  const LoadingState = () => (
+    <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <h3 className="text-lg font-semibold text-gray-800 mb-2">
+          Loading Project Data
+        </h3>
+        <p className="text-gray-500">
+          Fetching project details, schedule, and budget information...
+        </p>
+      </div>
+    </div>
+  );
+
   return (
-    <div>
+    <div className="relative">
+      {/* Loading Overlay */}
+      {isLoading && <LoadingState />}
+
       {/* Admin Dashboard Banner */}
       <div className="bg-blue-600 rounded-lg p-6 mb-6">
         <div className="flex items-center justify-between">
@@ -638,7 +659,10 @@ export default function AdminPage() {
             </svg>
           </div>
           <div className="text-3xl font-bold text-green-600 mb-2">
-            {formatMoney(summary.totalBudget || 0)}
+            {summary.totalBudget ? formatMoney(summary.totalBudget) : "$0"}
+          </div>
+          <div className="text-sm text-green-600">
+            {summary.totalBudget ? "Total budget" : "No budget set"}
           </div>
         </div>
 
@@ -663,9 +687,38 @@ export default function AdminPage() {
           <div className="text-3xl font-bold text-blue-600 mb-2">
             {summary.teamMembers || 0}
           </div>
-          <div className="text-sm text-blue-600">Current crew size</div>
+          <div className="text-sm text-blue-600">
+            {summary.teamMembers ? "Current crew size" : "No team members"}
+          </div>
+        </div>
+
+        {/* Schedule Progress Card */}
+        <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-gray-700 font-medium">Schedule Progress</h3>
+            <svg
+              className="w-6 h-6 text-purple-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          </div>
+          <div className="text-3xl font-bold text-purple-600 mb-2">
+            {summary.schedule?.length || 0}
+          </div>
+          <div className="text-sm text-purple-600">
+            {summary.schedule?.length ? "Total tasks" : "No schedule data"}
+          </div>
         </div>
       </div>
+
       {/* Schedule Lookahead and Budget Chart Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
         {/* 2-Week Schedule Lookahead */}
@@ -674,7 +727,13 @@ export default function AdminPage() {
             2-Week Schedule Lookahead
           </h3>
           <div className="space-y-4">
-            {scheduleTasks.length > 0 ? (
+            {!summary.schedule || summary.schedule.length === 0 ? (
+              <EmptyState
+                icon="📅"
+                title="No Schedule"
+                description="No schedule has been uploaded for this project yet."
+              />
+            ) : scheduleTasks.length > 0 ? (
               scheduleTasks.map((task) => (
                 <div
                   key={task.id}
@@ -717,8 +776,14 @@ export default function AdminPage() {
                 </div>
               ))
             ) : (
-              <div className="text-center text-gray-500 py-4">
-                No tasks scheduled for the next 2 weeks
+              <div className="text-center py-8">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-4">
+                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h4 className="text-lg font-medium text-gray-800 mb-1">All caught up!</h4>
+                <p className="text-gray-500">No tasks in the next 2 weeks. Take a break! ☕</p>
               </div>
             )}
           </div>
@@ -730,17 +795,22 @@ export default function AdminPage() {
             <h3 className="text-lg font-semibold text-gray-800">
               Budget Variance by Trade
             </h3>
-            <button className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors">
-              Edit Budget
-            </button>
+            <Link
+              className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+              href={"/dashboard/budget"}
+            >
+              View Details
+            </Link>
           </div>
           <div className="h-80">
             {isDataLoaded && budgetData.labels.length > 0 ? (
               <Bar data={budgetData} options={chartOptions} />
             ) : (
-              <div className="flex items-center justify-center h-full text-gray-500">
-                Loading chart...
-              </div>
+              <EmptyState
+                icon="💰"
+                title="No Budget Data"
+                description="Budget data is not available for this project. Upload a budget file to see the variance chart."
+              />
             )}
           </div>
         </div>
@@ -752,20 +822,28 @@ export default function AdminPage() {
           Recent Daily Reports
         </h3>
         <div className="space-y-4">
-          {dailyReports.map((report) => (
-            <div key={report.id} className="border-l-4 border-blue-500 pl-4">
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-medium text-gray-800">{report.date}</h4>
+          {dailyReports.length > 0 ? (
+            dailyReports.map((report) => (
+              <div key={report.id} className="border-l-4 border-blue-500 pl-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-medium text-gray-800">{report.date}</h4>
+                  <div className="text-sm text-gray-500">
+                    {report.weather}, {report.temperature}
+                  </div>
+                </div>
+                <p className="text-gray-600 mb-2">{report.description}</p>
                 <div className="text-sm text-gray-500">
-                  {report.weather}, {report.temperature}
+                  ({report.crewSize} crew)
                 </div>
               </div>
-              <p className="text-gray-600 mb-2">{report.description}</p>
-              <div className="text-sm text-gray-500">
-                ({report.crewSize} crew)
-              </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <EmptyState
+              icon="📝"
+              title="No Daily Reports"
+              description="No daily reports have been submitted for this project yet. Check back later for updates."
+            />
+          )}
         </div>
       </div>
 
@@ -974,106 +1052,6 @@ function CreateProjectModal({
                 placeholder="Enter project location"
                 className="w-full border border-input rounded-lg px-3 py-2 bg-input text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
-            </div>
-
-            {/* Collaborators */}
-            <div>
-              <label className="block text-sm font-medium text-card-foreground mb-2">
-                Collaborators
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={collaboratorQuery}
-                  onChange={handleInputChange}
-                  onFocus={() =>
-                    setShowSuggestions(collaboratorQuery.length > 0)
-                  }
-                  placeholder="Search and select collaborators..."
-                  className="w-full border border-input rounded-lg px-3 py-2 bg-input text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-
-                {/* Searchable Dropdown */}
-                {showSuggestions && filteredCollaborators.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-card border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                    {filteredCollaborators.map((collab) => (
-                      <div
-                        key={collab.id}
-                        onClick={() => handleCollaboratorSelect(collab)}
-                        className="px-3 py-2 hover:bg-accent cursor-pointer flex items-center justify-between"
-                      >
-                        <div>
-                          <div className="font-medium text-card-foreground">
-                            {collab.name}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {collab.email}
-                          </div>
-                        </div>
-                        <svg
-                          className="w-4 h-4 text-muted-foreground"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                          />
-                        </svg>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* No results message */}
-                {showSuggestions &&
-                  collaboratorQuery.length > 0 &&
-                  filteredCollaborators.length === 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-card border border-input rounded-lg shadow-lg px-3 py-2 text-muted-foreground">
-                      No collaborators found
-                    </div>
-                  )}
-              </div>
-
-              {/* Selected Collaborators */}
-              {selectedCollaborators.length > 0 && (
-                <div className="mt-3">
-                  <div className="text-sm font-medium text-card-foreground mb-2">
-                    Selected Collaborators:
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedCollaborators.map((collab) => (
-                      <div
-                        key={collab.id}
-                        className="px-3 py-1 bg-primary text-primary-foreground rounded-full text-sm flex items-center space-x-2"
-                      >
-                        <span>{collab.name}</span>
-                        <button
-                          onClick={() => handleCollaboratorRemove(collab.id)}
-                          className="hover:bg-primary-foreground/20 rounded-full p-0.5"
-                        >
-                          <svg
-                            className="w-3 h-3"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M6 18L18 6M6 6l12 12"
-                            />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Error Message */}

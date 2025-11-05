@@ -1,5 +1,58 @@
 import supabase from "../../lib/supabaseClinet.js";
 
+// Utility functions
+export const dailyReportsUtils = {
+  // Format date for display
+  formatDate: (date) => {
+    return new Date(date).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  },
+
+  // Get status color based on status
+  getStatusColor: (status) => {
+    const statusColors = {
+      draft: "bg-yellow-100 text-yellow-800",
+      submitted: "bg-blue-100 text-blue-800",
+      approved: "bg-green-100 text-green-800",
+      rejected: "bg-red-100 text-red-800",
+    };
+    return statusColors[status] || "bg-gray-100 text-gray-800";
+  },
+
+  // Get status icon
+  getStatusIcon: (status) => {
+    const statusIcons = {
+      draft: "📝",
+      submitted: "⏳",
+      approved: "✅",
+      rejected: "❌",
+    };
+    return statusIcons[status] || "📄";
+  },
+
+  // Calculate report completeness percentage
+  calculateCompleteness: (report) => {
+    if (!report) return 0;
+    
+    const requiredFields = [
+      'work_summary',
+      'work_completed',
+      'total_workers',
+      'total_work_hours'
+    ];
+
+    const completedFields = requiredFields.filter(
+      field => report[field] !== null && report[field] !== undefined && report[field] !== ''
+    ).length;
+
+    return Math.round((completedFields / requiredFields.length) * 100);
+  }
+};
+
+
 /**
  * Fetch all daily reports with related project name
  */
@@ -74,12 +127,37 @@ export const dailyReportsApi = {
     }
   },
 
-  // Create a new daily report
+  // Create a new daily report with only valid fields from the schema
   async createDailyReport(reportData) {
     try {
+      // Filter to only include fields that exist in the database schema
+      const validFields = [
+        'report_date', 'weather_condition', 'work_summary', 'created_by',
+        'work_completed', 'work_in_progress', 'work_scheduled', 'safety_incidents',
+        'quality_issues', 'delays_reasons', 'total_workers', 'total_work_hours',
+        'progress_percentage', 'next_day_plan', 'status', 'weather_conditions',
+        'reporter_id', 'project_id', 'id', 'photos_urls'
+      ];
+      
+      const filteredData = {};
+      Object.keys(reportData).forEach(key => {
+        if (validFields.includes(key)) {
+          filteredData[key] = reportData[key];
+        }
+      });
+      
+      // Ensure required fields have default values
+      if (!filteredData.status) {
+        filteredData.status = 'draft';
+      }
+      
+      if (!filteredData.created_at) {
+        filteredData.created_at = new Date().toISOString();
+      }
+      
       const { data, error } = await supabase
         .from("daily_reports")
-        .insert([reportData])
+        .insert([filteredData])
         .select()
         .single();
 
@@ -94,9 +172,25 @@ export const dailyReportsApi = {
   // Update a daily report
   async updateDailyReport(reportId, updates) {
     try {
+      // Filter to only include valid fields
+      const validFields = [
+        'report_date', 'weather_condition', 'work_summary', 'created_by',
+        'work_completed', 'work_in_progress', 'work_scheduled', 'safety_incidents',
+        'quality_issues', 'delays_reasons', 'total_workers', 'total_work_hours',
+        'progress_percentage', 'next_day_plan', 'status', 'weather_conditions',
+        'reporter_id', 'project_id', 'photos_urls'
+      ];
+      
+      const filteredUpdates = {};
+      Object.keys(updates).forEach(key => {
+        if (validFields.includes(key)) {
+          filteredUpdates[key] = updates[key];
+        }
+      });
+
       const { data, error } = await supabase
         .from("daily_reports")
-        .update(updates)
+        .update(filteredUpdates)
         .eq("id", reportId)
         .select()
         .single();
@@ -125,7 +219,7 @@ export const dailyReportsApi = {
     }
   },
 
-  // Submit daily report for approval
+  // Submit daily report
   async submitDailyReport(reportId) {
     try {
       const { data, error } = await supabase
@@ -144,43 +238,56 @@ export const dailyReportsApi = {
   },
 
   // Approve daily report
-  async approveDailyReport(reportId, adminUserId, adminNotes = null) {
+  async approveDailyReport(reportId) {
     try {
-      const { data, error } = await supabase.rpc("update_report_status", {
-        report_uuid: reportId,
-        new_status: "approved",
-        admin_user_id: adminUserId,
-        admin_notes: adminNotes,
-      });
+      const { data, error } = await supabase
+        .from('daily_reports')
+        .update({
+          status: 'approved',
+        })
+        .eq('id', reportId)
+        .select();
 
       if (error) throw error;
       return { data, error: null };
     } catch (error) {
-      console.error("Error approving daily report:", error);
+      console.error('Error approving daily report:', error);
       return { data: null, error };
     }
   },
 
-  // Reject daily report
-  async rejectDailyReport(
-    reportId,
-    adminUserId,
-    rejectedReason,
-    adminNotes = null
-  ) {
+  // Reject daily report - marks the report as 'rejected' instead of deleting
+  async rejectDailyReport(reportId) {
     try {
-      const { data, error } = await supabase.rpc("update_report_status", {
-        report_uuid: reportId,
-        new_status: "rejected",
-        admin_user_id: adminUserId,
-        admin_notes: adminNotes,
-        rejected_reason: rejectedReason,
-      });
+      const { data, error } = await supabase
+        .from('daily_reports')
+        .update({
+          status: 'rejected',
+
+        })
+        .eq('id', reportId)
+        .select();
 
       if (error) throw error;
       return { data, error: null };
     } catch (error) {
-      console.error("Error rejecting daily report:", error);
+      console.error('Error rejecting daily report:', error);
+      return { data: null, error };
+    }
+  },
+
+  // Delete a daily report permanently
+  async deleteDailyReport(reportId) {
+    try {
+      const { error } = await supabase
+        .from('daily_reports')
+        .delete()
+        .eq('id', reportId);
+
+      if (error) throw error;
+      return { data: { success: true }, error: null };
+    } catch (error) {
+      console.error('Error deleting daily report:', error);
       return { data: null, error };
     }
   },
@@ -206,75 +313,21 @@ export const dailyReportsApi = {
       return { data: null, error };
     }
   },
-};
-
-// Daily Report Messages API
-export const dailyReportMessagesApi = {
-  // Get messages for a report
-  async getReportMessages(reportId) {
+  
+  // Get all reports for a project
+  async getProjectReports(projectId) {
     try {
       const { data, error } = await supabase
-        .from("daily_report_messages")
+        .from("daily_reports")
         .select("*")
-        .eq("report_id", reportId)
-        .order("created_at", { ascending: true });
-
-      if (error) throw error.message;
-      return { data, error: null };
-    } catch (error) {
-      console.error("Error fetching report messages:", error);
-      return { data: null, error };
-    }
-  },
-
-  // Add message to report
-  async addMessage(messageData) {
-    try {
-      const { data, error } = await supabase
-        .from("daily_report_messages")
-        .insert([messageData])
-        .select("*,auth.users(email,raw_user_meta_data)")
-        .single();
+        .eq("project_id", projectId)
+        .order("report_date", { ascending: false });
 
       if (error) throw error;
       return { data, error: null };
     } catch (error) {
-      console.error("Error adding message:", error);
+      console.error("Error fetching project reports:", error);
       return { data: null, error };
-    }
-  },
-
-  // Update message
-  async updateMessage(messageId, updates) {
-    try {
-      const { data, error } = await supabase
-        .from("daily_report_messages")
-        .update(updates)
-        .eq("id", messageId)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error) {
-      console.error("Error updating message:", error);
-      return { data: null, error };
-    }
-  },
-
-  // Delete message
-  async deleteMessage(messageId) {
-    try {
-      const { error } = await supabase
-        .from("daily_report_messages")
-        .delete()
-        .eq("id", messageId);
-
-      if (error) throw error;
-      return { error: null };
-    } catch (error) {
-      console.error("Error deleting message:", error);
-      return { error };
     }
   },
 };
@@ -438,83 +491,83 @@ export const dailyReportCategoriesApi = {
 };
 
 // Utility functions
-export const dailyReportsUtils = {
-  // Format date for display
-  formatDate: (date) => {
-    return new Date(date).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  },
+// const dailyReportsUtils = {
+//   // Format date for display
+//   formatDate: (date) => {
+//     return new Date(date).toLocaleDateString("en-US", {
+//       year: "numeric",
+//       month: "long",
+//       day: "numeric",
+//     });
+//   },
 
-  // Get status color
-  getStatusColor: (status) => {
-    const statusColors = {
-      draft: "bg-gray-100 text-gray-800",
-      submitted: "bg-yellow-100 text-yellow-800",
-      approved: "bg-green-100 text-green-800",
-      rejected: "bg-red-100 text-red-800",
-      needs_revision: "bg-orange-100 text-orange-800",
-    };
-    return statusColors[status] || "bg-gray-100 text-gray-800";
-  },
+//   // Get status color
+//   getStatusColor: (status) => {
+//     const statusColors = {
+//       draft: "bg-gray-100 text-gray-800",
+//       submitted: "bg-yellow-100 text-yellow-800",
+//       approved: "bg-green-100 text-green-800",
+//       rejected: "bg-red-100 text-red-800",
+//       needs_revision: "bg-orange-100 text-orange-800",
+//     };
+//     return statusColors[status] || "bg-gray-100 text-gray-800";
+//   },
 
-  // Get status icon
-  getStatusIcon: (status) => {
-    const statusIcons = {
-      draft: "📝",
-      submitted: "⏳",
-      approved: "✅",
-      rejected: "❌",
-      needs_revision: "🔄",
-    };
-    return statusIcons[status] || "📄";
-  },
+//   // Get status icon
+//   getStatusIcon: (status) => {
+//     const statusIcons = {
+//       draft: "📝",
+//       submitted: "⏳",
+//       approved: "✅",
+//       rejected: "❌",
+//       needs_revision: "🔄",
+//     };
+//     return statusIcons[status] || "📄";
+//   },
 
-  // Calculate report completeness
-  calculateCompleteness: (report) => {
-    const fields = [
-      "work_summary",
-      "work_completed",
-      "total_workers",
-      "progress_percentage",
-    ];
+//   // Calculate report completeness
+//   calculateCompleteness: (report) => {
+//     const fields = [
+//       "work_summary",
+//       "work_completed",
+//       "total_workers",
+//       "progress_percentage",
+//     ];
 
-    const completedFields = fields.filter(
-      (field) => report[field] && report[field].toString().trim() !== ""
-    ).length;
+//     const completedFields = fields.filter(
+//       (field) => report[field] && report[field].toString().trim() !== ""
+//     ).length;
 
-    return Math.round((completedFields / fields.length) * 100);
-  },
+//     return Math.round((completedFields / fields.length) * 100);
+//   },
 
-  // Validate report data
-  validateReportData: (reportData) => {
-    const errors = [];
+//   // Validate report data
+//   validateReportData: (reportData) => {
+//     const errors = [];
 
-    if (!reportData.report_date) {
-      errors.push("Report date is required");
-    }
+//     if (!reportData.report_date) {
+//       errors.push("Report date is required");
+//     }
 
-    if (!reportData.work_summary || reportData.work_summary.trim() === "") {
-      errors.push("Work summary is required");
-    }
+//     if (!reportData.work_summary || reportData.work_summary.trim() === "") {
+//       errors.push("Work summary is required");
+//     }
 
-    if (!reportData.work_completed || reportData.work_completed.trim() === "") {
-      errors.push("Work completed is required");
-    }
+//     if (!reportData.work_completed || reportData.work_completed.trim() === "") {
+//       errors.push("Work completed is required");
+//     }
 
-    if (!reportData.total_workers || reportData.total_workers <= 0) {
-      errors.push("Total workers must be greater than 0");
-    }
+//     if (!reportData.total_workers || reportData.total_workers <= 0) {
+//       errors.push("Total workers must be greater than 0");
+//     }
 
-    if (
-      reportData.progress_percentage < 0 ||
-      reportData.progress_percentage > 100
-    ) {
-      errors.push("Progress percentage must be between 0 and 100");
-    }
+//     if (
+//       reportData.progress_percentage < 0 ||
+//       reportData.progress_percentage > 100
+//     ) {
+//       errors.push("Progress percentage must be between 0 and 100");
+//     }
 
-    return errors;
-  },
-};
+//     return errors;
+//   },
+// };

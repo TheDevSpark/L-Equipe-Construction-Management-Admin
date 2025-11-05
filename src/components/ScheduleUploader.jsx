@@ -137,64 +137,6 @@ export default function ScheduleUploader({ projectId }) {
   };
 
   return (
-    // <div className="space-y-4">
-    //   {/* Upload Controls */}
-    //   <div className="flex flex-wrap items-center gap-3">
-    //     <input type="file" accept=".xlsx,.xls" onChange={handleFile} />
-    //     <Button onClick={() => handleUpload(false)} disabled={loading}>
-    //       Upload
-    //     </Button>
-    //     <Button onClick={() => handleUpload(true)} disabled={loading}>
-    //       Update
-    //     </Button>
-    //     <Button onClick={loadFromSupabase} variant="outline">
-    //       Refresh
-    //     </Button>
-    //   </div>
-
-    //   {/* Display Table + Gantt Chart */}
-    //   <div className="border p-3 rounded-md">
-    //     {tasks.length === 0 ? (
-    //       <p className="text-sm text-muted-foreground">
-    //         No schedule tasks available.
-    //       </p>
-    //     ) : (
-    //       <>
-    //         <div className="overflow-x-auto mb-4">
-    //           <table className="w-full text-sm border-collapse">
-    //             <thead>
-    //               <tr className="bg-muted text-xs text-muted-foreground">
-    //                 <th className="p-2 text-left">Task</th>
-    //                 <th className="p-2 text-left">Start</th>
-    //                 <th className="p-2 text-left">End</th>
-    //                 <th className="p-2 text-left">Progress</th>
-    //                 <th className="p-2 text-left">Dependencies</th>
-    //               </tr>
-    //             </thead>
-    //             <tbody>
-    //               {tasks.map((t) => (
-    //                 <tr key={t.id} className="border-t">
-    //                   <td className="p-2">{t.name}</td>
-    //                   <td className="p-2">{String(t.start || "")}</td>
-    //                   <td className="p-2">{String(t.end || "")}</td>
-    //                   <td className="p-2">{t.progress ?? 0}%</td>
-    //                   <td className="p-2">{String(t.dependencies || "")}</td>
-    //                 </tr>
-    //               ))}
-    //             </tbody>
-    //           </table>
-    //         </div>
-
-    //         {/* <div style={{ height: 400 }}>
-    //           <Gantt data={tasks} />
-    //         </div> */}
-    //         <div style={{ height: 400 }}>
-    //           <ClientGantt data={tasks} />
-    //         </div>
-    //       </>
-    //     )}
-    //   </div>
-    // </div>
     <div className="space-y-6">
       {/* HEADER */}
       <div className="flex items-center justify-between flex-wrap gap-3">

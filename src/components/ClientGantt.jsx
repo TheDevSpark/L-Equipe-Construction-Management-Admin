@@ -34,21 +34,8 @@ export default function ClientGantt({ data }) {
     [data]
   );
 
-  // Pagination logic
-  const itemsPerPage = 10;
-  const [currentPage, setCurrentPage] = useState(1);
-  const totalPages = Math.ceil(allTasks.length / itemsPerPage);
-
-  const currentTasks = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return allTasks.slice(startIndex, startIndex + itemsPerPage);
-  }, [allTasks, currentPage]);
-
-  const handlePrev = () => setCurrentPage((p) => Math.max(p - 1, 1));
-  const handleNext = () => setCurrentPage((p) => Math.min(p + 1, totalPages));
-
-  // Dynamically set height based on tasks per page
-  const chartHeight = Math.max(currentTasks.length * 45 + 100, 300);
+  // Set height based on all tasks
+  const chartHeight = Math.max(allTasks.length * 45 + 100, 600); // Increased minimum height
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const handleFullscreen = () => {
@@ -63,27 +50,129 @@ export default function ClientGantt({ data }) {
   };
 
   const handlePrint = () => {
-    const printContent = document.getElementById("gantt-container");
-    const newWindow = window.open("", "_blank");
+    // Get the current scroll position
+    const scrollX = window.scrollX || document.documentElement.scrollLeft;
+    const scrollY = window.scrollY || document.documentElement.scrollTop;
+    
+    // Temporarily make the container full width and height for printing
+    const ganttContainer = document.getElementById("gantt-container");
+    const originalStyles = {
+      width: ganttContainer.style.width,
+      height: ganttContainer.style.height,
+      overflow: ganttContainer.style.overflow,
+      padding: ganttContainer.style.padding,
+      border: ganttContainer.style.border,
+      borderRadius: ganttContainer.style.borderRadius,
+    };
+
+    // Apply print styles
+    ganttContainer.style.width = '100%';
+    ganttContainer.style.height = 'auto';
+    ganttContainer.style.overflow = 'visible';
+    ganttContainer.style.padding = '0';
+    ganttContainer.style.border = 'none';
+    ganttContainer.style.borderRadius = '0';
+
+    // Get the Gantt chart container and adjust its styles
+    const ganttChart = ganttContainer.querySelector('.gantt-container');
+    if (ganttChart) {
+      ganttChart.style.height = 'auto';
+      ganttChart.style.overflow = 'visible';
+      ganttChart.style.width = '100%';
+    }
+
+    // Create print window
+    const newWindow = window.open('', '_blank');
+    
+    // Add print styles
     newWindow.document.write(`
       <html>
         <head>
           <title>Project Gantt Chart</title>
           <link rel="stylesheet" href="https://unpkg.com/gantt-task-react/dist/index.css" />
           <style>
-            body { font-family: sans-serif; padding: 20px; }
-            .gantt-task-react-wrapper { width: 100%; }
+            @page { 
+              size: auto;  /* auto is the initial value */
+              margin: 0mm; /* this affects the margin in the printer settings */
+            }
+            body { 
+              margin: 0;
+              padding: 20px;
+              font-family: Arial, sans-serif;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .gantt-container {
+              width: 100% !important;
+              height: auto !important;
+              overflow: visible !important;
+              transform: none !important;
+            }
+            .gantt-task-content {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            .gantt-task-list-item {
+              page-break-inside: avoid;
+            }
+            @media print {
+              .no-print {
+                display: none !important;
+              }
+              .gantt-container {
+                overflow: visible !important;
+                height: auto !important;
+              }
+              .gantt-vertical-scroll {
+                overflow: visible !important;
+                height: auto !important;
+              }
+              .gantt-horizontal-scroll {
+                overflow: visible !important;
+                width: 100% !important;
+              }
+              .gantt-task-list {
+                width: 100% !important;
+              }
+            }
           </style>
         </head>
         <body>
-          ${printContent.innerHTML}
+          <div style="width: 100%; overflow: visible;">
+            ${ganttContainer.outerHTML}
+          </div>
           <script>
-            window.onload = () => window.print();
+            // Wait for fonts and images to load
+            window.onload = function() {
+              // Set a small delay to ensure everything is rendered
+              setTimeout(() => {
+                window.print();
+                // Close the window after printing
+                window.onafterprint = function() {
+                  window.close();
+                };
+              }, 500);
+            };
           </script>
         </body>
       </html>
     `);
+    
+    // Close the document to finish loading
     newWindow.document.close();
+    
+    // Restore original styles after a delay
+    setTimeout(() => {
+      if (ganttContainer) {
+        Object.assign(ganttContainer.style, originalStyles);
+      }
+      if (ganttChart) {
+        ganttChart.style.height = '';
+        ganttChart.style.overflow = '';
+        ganttChart.style.width = '';
+      }
+      window.scrollTo(scrollX, scrollY);
+    }, 1000);
   };
 
   return (
@@ -138,55 +227,29 @@ export default function ClientGantt({ data }) {
       </div>
 
       {/* Gantt Chart */}
-      <div style={{ height: chartHeight, background: "white" }}>
+      <div 
+        style={{ 
+          height: '70vh',
+          background: "white",
+          overflowY: 'auto',
+          overflowX: 'auto',
+          border: '1px solid #eee',
+          borderRadius: '4px',
+          position: 'relative',
+          width: '100%',
+          minWidth: 'fit-content'
+        }}
+        className="gantt-print-container"
+      >
         <Gantt
-          tasks={currentTasks}
+          tasks={allTasks}
           viewMode={ViewMode.Week}
           listCellWidth="180px"
           columnWidth={65}
+          barFill={60}
+          barCornerRadius={4}
+          rowHeight={45}
         />
-      </div>
-
-      {/* Pagination */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          gap: "1rem",
-        }}
-      >
-        <button
-          onClick={handlePrev}
-          disabled={currentPage === 1}
-          style={{
-            padding: "6px 12px",
-            border: "1px solid #ccc",
-            borderRadius: "6px",
-            background: currentPage === 1 ? "#f0f0f0" : "white",
-            cursor: currentPage === 1 ? "not-allowed" : "pointer",
-          }}
-        >
-          ⬅ Previous
-        </button>
-
-        <span style={{ fontSize: "14px" }}>
-          Page {currentPage} of {totalPages}
-        </span>
-
-        <button
-          onClick={handleNext}
-          disabled={currentPage === totalPages}
-          style={{
-            padding: "6px 12px",
-            border: "1px solid #ccc",
-            borderRadius: "6px",
-            background: currentPage === totalPages ? "#f0f0f0" : "white",
-            cursor: currentPage === totalPages ? "not-allowed" : "pointer",
-          }}
-        >
-          Next ➡
-        </button>
       </div>
     </div>
   );

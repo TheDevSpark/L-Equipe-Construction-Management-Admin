@@ -2,53 +2,23 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { ProjectSelector, ProjectInfoCard } from "@/components/ProjectSelector";
-import {
-  TeamMemberCard,
-  TeamMemberSearch,
-  TeamStatistics,
-} from "@/components/TeamComponents";
-import { teamMembersApi, projectTeamApi, teamUtils } from "@/lib/teamApi";
+import { ProjectSelector } from "@/components/ProjectSelector";
 import toast from "react-hot-toast";
 import supabase from "../../../../lib/supabaseClinet";
 
 export default function TeamsPage() {
-  const [activeTab, setActiveTab] = useState("members");
-  const [teamMembers, setTeamMembers] = useState([]);
   const [projects, setProjects] = useState([]);
   const [selectedProject, setSelectedProject] = useState(null);
-  const [projectTeam, setProjectTeam] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [projectTeamMembers, setProjectTeamMembers] = useState([]);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState(""); // 'add-member', 'edit-member'
-  const [selectedMember, setSelectedMember] = useState(null);
 
-  // Form states
-  const [newMember, setNewMember] = useState({
-    first_name: "",
-    last_name: "",
-    email: "",
-    phone_number: "",
-    role: "",
-    specialization: "",
-    hourly_rate: "",
-  });
-
-  // ✅ Collaborator selection states
+  // ✅ Team member selection states
   const [collaboratorQuery, setCollaboratorQuery] = useState("");
   const [showCollaboratorSuggestions, setShowCollaboratorSuggestions] =
     useState(false);
@@ -64,7 +34,7 @@ export default function TeamsPage() {
 
     if (error) {
       console.error("Error fetching users:", error);
-      toast.error("Failed to load collaborators");
+      toast.error("Failed to load team members");
     } else {
       console.log("Users fetched:", data);
       // Map Supabase data to collaborator format
@@ -78,9 +48,49 @@ export default function TeamsPage() {
     }
   };
 
+  // Load existing team members when project is selected
+  const loadProjectTeamMembers = async (projectId) => {
+    if (!projectId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("project")
+        .select("team_members")
+        .eq("id", projectId)
+        .single();
+
+      if (error) {
+        console.error("Error loading team members:", error.message);
+        return;
+      }
+
+      if (data && data.team_members) {
+        setProjectTeamMembers(data.team_members);
+
+        // Map to display format with user details
+        const teamMembersWithDetails = data.team_members
+          .map((tm) => {
+            const user = availableCollaborators.find((u) => u.id === tm.id);
+            return user ? { ...user, teamRole: tm.role } : null;
+          })
+          .filter(Boolean);
+
+        setSelectedCollaborators(teamMembersWithDetails);
+      }
+    } catch (error) {
+      console.error("Error loading team members:", error);
+    }
+  };
+
   useEffect(() => {
     getAllUsers();
   }, []);
+
+  useEffect(() => {
+    if (selectedProject?.id) {
+      loadProjectTeamMembers(selectedProject.id);
+    }
+  }, [selectedProject?.id, availableCollaborators]);
 
   // Filter collaborators based on search input
   const filteredCollaborators = availableCollaborators.filter(
@@ -90,7 +100,12 @@ export default function TeamsPage() {
   );
 
   const handleCollaboratorSelect = (collaborator) => {
-    setSelectedCollaborators((prev) => [...prev, collaborator]);
+    // Add collaborator with default role
+    const collaboratorWithRole = {
+      ...collaborator,
+      teamRole: "team_member", // Default role
+    };
+    setSelectedCollaborators((prev) => [...prev, collaboratorWithRole]);
     setCollaboratorQuery("");
     setShowCollaboratorSuggestions(false);
   };
@@ -101,38 +116,74 @@ export default function TeamsPage() {
     );
   };
 
+  const handleCollaboratorRoleChange = (collaboratorId, newRole) => {
+    setSelectedCollaborators((prev) =>
+      prev.map((collab) =>
+        collab.id === collaboratorId ? { ...collab, teamRole: newRole } : collab
+      )
+    );
+  };
+
   const handleCollaboratorInputChange = (e) => {
     setCollaboratorQuery(e.target.value);
     setShowCollaboratorSuggestions(e.target.value.trim().length > 0);
   };
 
-  // ... rest of your existing code (loadProjects, loadTeamMembers, etc.)
+  // Function to handle saving team members
+  const handleSaveTeamMembers = async () => {
+    try {
+      setLoading(true);
 
-  const openModal = (type, member = null) => {
-    setModalType(type);
-    setSelectedMember(member);
-    setIsModalOpen(true);
+      if (!selectedProject?.id) {
+        toast.error("Please select a project first");
+        return;
+      }
 
-    if (type === "edit-member" && member) {
-      setNewMember({
-        first_name: member.first_name,
-        last_name: member.last_name,
-        email: member.email,
-        phone_number: member.phone_number || "",
-        role: member.role,
-        specialization: member.specialization || "",
-        hourly_rate: member.hourly_rate || "",
-      });
-    }
+      // Prepare the team_members array in the required format
+      const teamMembersArray = selectedCollaborators.map((collab) => ({
+        id: collab.id,
+        role: collab.teamRole,
+      }));
 
-    // Reset collaborators when opening modal
-    if (type === "add-member") {
-      setSelectedCollaborators([]);
-      setCollaboratorQuery("");
+      // Update the project with new team members
+      const { error } = await supabase
+        .from("project")
+        .update({
+          team_members: teamMembersArray,
+        })
+        .eq("id", selectedProject.id);
+
+      if (error) {
+        throw error.message;
+      }
+
+      toast.success("Team members saved successfully!");
+      setProjectTeamMembers(teamMembersArray);
+      closeModal();
+    } finally {
+      setLoading(false);
     }
   };
 
-  // ... rest of your existing functions (handleAddMember, handleUpdateMember, etc.)
+  const openModal = () => {
+    if (!selectedProject?.id) {
+      toast.error("Please select a project first");
+      return;
+    }
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setCollaboratorQuery("");
+    setShowCollaboratorSuggestions(false);
+    // Don't reset selectedCollaborators - keep them for next time modal opens
+  };
+
+  // Get user details for display
+  const getTeamMemberDetails = (teamMember) => {
+    return availableCollaborators.find((user) => user.id === teamMember.id);
+  };
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -143,7 +194,7 @@ export default function TeamsPage() {
             Team Management
           </h1>
           <p className="text-muted-foreground">
-            Manage team members and project assignments
+            Manage team members and their roles
           </p>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 lg:gap-4">
@@ -161,20 +212,77 @@ export default function TeamsPage() {
             />
           </div>
           <ThemeToggle />
+
+          {/* Add Team Members Button */}
+          <Button
+            onClick={openModal}
+            className="bg-blue-600 hover:bg-blue-700"
+            disabled={!selectedProject}
+          >
+            <svg
+              className="w-4 h-4 mr-2"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+              />
+            </svg>
+            Manage Team Members
+          </Button>
         </div>
       </div>
 
-      {/* ... rest of your existing JSX ... */}
+      {/* Current Team Members Display */}
+      {selectedProject && (
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Current Team Members - {selectedProject.projectName}
+          </h3>
+          {projectTeamMembers.length > 0 ? (
+            <div className="space-y-3">
+              {projectTeamMembers.map((teamMember, index) => {
+                const userDetails = getTeamMemberDetails(teamMember);
+                return (
+                  <div
+                    key={`${teamMember.id}-${index}`}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-800">
+                        {userDetails?.name || "Unknown User"}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {userDetails?.email || "No email"} • Role:{" "}
+                        {teamMember.role}
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-600 capitalize">
+                      {teamMember.role}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              No team members assigned to this project yet.
+            </div>
+          )}
+        </div>
+      )}
 
-      {/* Add/Edit Member Modal */}
+      {/* Team Members Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-card text-card-foreground rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl border">
+          <div className="bg-card text-card-foreground rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-xl border">
             <div className="flex items-center justify-between p-4">
               <h3 className="text-xl font-semibold text-card-foreground">
-                {modalType === "add-member"
-                  ? "Add Team Member"
-                  : "Edit Team Member"}
+                Manage Team Members - {selectedProject?.projectName}
               </h3>
               <button
                 onClick={closeModal}
@@ -197,233 +305,120 @@ export default function TeamsPage() {
             </div>
 
             <div className="p-6">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (modalType === "add-member") {
-                    handleAddMember();
-                  } else {
-                    handleUpdateMember();
-                  }
-                }}
-                className="space-y-4"
-              >
-                {/* Basic Info Fields */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="first_name">First Name</Label>
+              <div className="space-y-4">
+                {/* Team Member Selection */}
+                <div>
+                  <Label htmlFor="collaborators">Add Team Members</Label>
+                  <div className="relative">
                     <Input
-                      id="first_name"
-                      value={newMember.first_name}
-                      onChange={(e) =>
-                        setNewMember({
-                          ...newMember,
-                          first_name: e.target.value,
-                        })
+                      type="text"
+                      value={collaboratorQuery}
+                      onChange={handleCollaboratorInputChange}
+                      onFocus={() =>
+                        setShowCollaboratorSuggestions(
+                          collaboratorQuery.length > 0
+                        )
                       }
-                      required
+                      placeholder="Search and select team members..."
+                      className="w-full border border-input rounded-lg px-3 py-2 bg-input text-card-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                     />
-                  </div>
-                  <div>
-                    <Label htmlFor="last_name">Last Name</Label>
-                    <Input
-                      id="last_name"
-                      value={newMember.last_name}
-                      onChange={(e) =>
-                        setNewMember({
-                          ...newMember,
-                          last_name: e.target.value,
-                        })
-                      }
-                      required
-                    />
-                  </div>
-                </div>
 
-                <div>
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={newMember.email}
-                    onChange={(e) =>
-                      setNewMember({ ...newMember, email: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="phone_number">Phone Number</Label>
-                  <Input
-                    id="phone_number"
-                    value={newMember.phone_number}
-                    onChange={(e) =>
-                      setNewMember({
-                        ...newMember,
-                        phone_number: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="role">Role</Label>
-                  <select
-                    id="role"
-                    value={newMember.role || ""}
-                    onChange={(e) =>
-                      setNewMember({ ...newMember, role: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    required
-                  >
-                    <option value="" className="bg-background text-foreground">
-                      Select Role
-                    </option>
-                    <option
-                      value="project_manager"
-                      className="bg-background text-foreground"
-                    >
-                      Project Manager
-                    </option>
-                    <option
-                      value="lead"
-                      className="bg-background text-foreground"
-                    >
-                      Lead
-                    </option>
-                    <option
-                      value="logistics"
-                      className="bg-background text-foreground"
-                    >
-                      Logistics
-                    </option>
-                    <option
-                      value="assistant_pm"
-                      className="bg-background text-foreground"
-                    >
-                      Assistant PM
-                    </option>
-                  </select>
-                </div>
-
-                <div>
-                  <Label htmlFor="specialization">Specialization</Label>
-                  <Input
-                    id="specialization"
-                    value={newMember.specialization}
-                    onChange={(e) =>
-                      setNewMember({
-                        ...newMember,
-                        specialization: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="hourly_rate">Hourly Rate ($)</Label>
-                  <Input
-                    id="hourly_rate"
-                    type="number"
-                    step="0.01"
-                    value={newMember.hourly_rate}
-                    onChange={(e) =>
-                      setNewMember({
-                        ...newMember,
-                        hourly_rate: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-
-                {/* ✅ Collaborator Selection - Only show in add member mode */}
-                {modalType === "add-member" && (
-                  <div>
-                    <Label htmlFor="collaborators">Collaborators</Label>
-                    <div className="relative">
-                      <Input
-                        type="text"
-                        value={collaboratorQuery}
-                        onChange={handleCollaboratorInputChange}
-                        onFocus={() =>
-                          setShowCollaboratorSuggestions(
-                            collaboratorQuery.length > 0
-                          )
-                        }
-                        placeholder="Search and select collaborators..."
-                        className="w-full"
-                      />
-
-                      {/* Searchable Dropdown */}
-                      {showCollaboratorSuggestions &&
-                        filteredCollaborators.length > 0 && (
-                          <div className="absolute z-10 w-full mt-1 bg-card border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                            {filteredCollaborators.map((collab) => (
-                              <div
-                                key={collab.id}
-                                onClick={() => handleCollaboratorSelect(collab)}
-                                className="px-3 py-2 hover:bg-accent cursor-pointer flex items-center justify-between"
-                              >
-                                <div>
-                                  <div className="font-medium text-card-foreground">
-                                    {collab.name}
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {collab.email}
-                                  </div>
-                                </div>
-                                <svg
-                                  className="w-4 h-4 text-muted-foreground"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                                  />
-                                </svg>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                      {/* No results message */}
-                      {showCollaboratorSuggestions &&
-                        collaboratorQuery.length > 0 &&
-                        filteredCollaborators.length === 0 && (
-                          <div className="absolute z-10 w-full mt-1 bg-card border border-input rounded-lg shadow-lg px-3 py-2 text-muted-foreground">
-                            No collaborators found
-                          </div>
-                        )}
-                    </div>
-
-                    {/* Selected Collaborators */}
-                    {selectedCollaborators.length > 0 && (
-                      <div className="mt-3">
-                        <div className="text-sm font-medium text-card-foreground mb-2">
-                          Selected Collaborators:
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedCollaborators.map((collab) => (
+                    {/* Searchable Dropdown */}
+                    {showCollaboratorSuggestions &&
+                      filteredCollaborators.length > 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-card border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          {filteredCollaborators.map((collab) => (
                             <div
                               key={collab.id}
-                              className="px-3 py-1 bg-primary text-primary-foreground rounded-full text-sm flex items-center space-x-2"
+                              onClick={() => handleCollaboratorSelect(collab)}
+                              className="px-3 py-2 hover:bg-accent cursor-pointer flex items-center justify-between"
                             >
-                              <span>{collab.name}</span>
+                              <div>
+                                <div className="font-medium text-card-foreground">
+                                  {collab.name}
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                  {collab.email}
+                                </div>
+                              </div>
+                              <svg
+                                className="w-4 h-4 text-muted-foreground"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                                />
+                              </svg>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                    {/* No results message */}
+                    {showCollaboratorSuggestions &&
+                      collaboratorQuery.length > 0 &&
+                      filteredCollaborators.length === 0 && (
+                        <div className="absolute z-10 w-full mt-1 bg-card border border-input rounded-lg shadow-lg px-3 py-2 text-muted-foreground">
+                          No team members found
+                        </div>
+                      )}
+                  </div>
+
+                  {/* Selected Team Members with Role Selection */}
+                  {selectedCollaborators.length > 0 && (
+                    <div className="mt-3">
+                      <div className="text-sm font-medium text-card-foreground mb-2">
+                        Selected Team Members ({selectedCollaborators.length}):
+                      </div>
+                      <div className="space-y-2">
+                        {selectedCollaborators.map((collab) => (
+                          <div
+                            key={collab.id}
+                            className="flex items-center justify-between p-3 bg-muted/30 rounded-lg"
+                          >
+                            <div className="flex-1">
+                              <div className="font-medium text-card-foreground">
+                                {collab.name}
+                              </div>
+                              <div className="text-sm text-muted-foreground">
+                                {collab.email}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center space-x-2">
+                              <select
+                                value={collab.teamRole || "team_member"}
+                                onChange={(e) =>
+                                  handleCollaboratorRoleChange(
+                                    collab.id,
+                                    e.target.value
+                                  )
+                                }
+                                className="px-3 py-1 border border-input rounded text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                              >
+                                <option value="team_member">Team Member</option>
+                                <option value="supervisor">Supervisor</option>
+                                <option value="coordinator">Coordinator</option>
+                                <option value="specialist">Specialist</option>
+                                <option value="assistant">Assistant</option>
+                                <option value="lead">Lead</option>
+                                <option value="manager">Manager</option>
+                              </select>
+
                               <button
                                 type="button"
                                 onClick={() =>
                                   handleCollaboratorRemove(collab.id)
                                 }
-                                className="hover:bg-primary-foreground/20 rounded-full p-0.5"
+                                className="text-destructive hover:text-destructive/80 p-1"
                               >
                                 <svg
-                                  className="w-3 h-3"
+                                  className="w-4 h-4"
                                   fill="none"
                                   stroke="currentColor"
                                   viewBox="0 0 24 24"
@@ -437,24 +432,32 @@ export default function TeamsPage() {
                                 </svg>
                               </button>
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        ))}
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
 
                 <div className="flex justify-end space-x-3 pt-4">
                   <Button type="button" variant="outline" onClick={closeModal}>
                     Cancel
                   </Button>
-                  <Button type="submit">
-                    {modalType === "add-member"
-                      ? "Add Member"
-                      : "Update Member"}
+                  <Button
+                    onClick={handleSaveTeamMembers}
+                    disabled={loading || selectedCollaborators.length === 0}
+                  >
+                    {loading ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin"></div>
+                        <span>Saving...</span>
+                      </div>
+                    ) : (
+                      "Save Team Members"
+                    )}
                   </Button>
                 </div>
-              </form>
+              </div>
             </div>
           </div>
         </div>

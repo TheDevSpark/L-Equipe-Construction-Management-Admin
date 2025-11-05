@@ -129,8 +129,8 @@ export default function Sidebar({ isOpen, onClose }) {
       ),
     },
     {
-      name: "Reports",
-      href: "/dashboard/reports",
+      name: "Clients",
+      href: "/dashboard/clients",
       icon: (
         <svg
           className="w-5 h-5"
@@ -142,7 +142,7 @@ export default function Sidebar({ isOpen, onClose }) {
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth={2}
-            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+            d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"
           />
         </svg>
       ),
@@ -153,27 +153,26 @@ export default function Sidebar({ isOpen, onClose }) {
     <>
       {/* Mobile Overlay */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 bg-opacity-50 z-40 lg:hidden"
           onClick={onClose}
         />
       )}
-      
+
       {/* Sidebar */}
-      <aside className={`
+      <aside
+        className={`
         fixed lg:static inset-y-0 left-0 z-50 w-64 border-r min-h-screen bg-sidebar
         transform transition-transform duration-300 ease-in-out
-        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
-      `}>
+        ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
+      `}
+      >
         {/* Mobile Header */}
         <div className="flex items-center justify-between p-4 border-b lg:hidden">
-          <h2 className="text-lg font-semibold text-sidebar-foreground">Menu</h2>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            className="p-2"
-          >
+          <h2 className="text-lg font-semibold text-sidebar-foreground">
+            Menu
+          </h2>
+          <Button variant="ghost" size="sm" onClick={onClose} className="p-2">
             <svg
               className="w-5 h-5"
               fill="none"

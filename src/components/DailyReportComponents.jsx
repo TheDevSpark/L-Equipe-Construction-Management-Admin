@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,6 +15,8 @@ import { useRouter } from "next/navigation";
 import { dailyReportsUtils } from "@/lib/dailyReportsApi";
 import { validateUuid } from "@/lib/supabaseHelpers";
 import toast from "react-hot-toast";
+import { useAuth } from "@/context/AuthContext";
+import { X, ChevronLeft, ChevronRight } from "lucide-react";
 
 // Daily Report Card Component
 export function DailyReportCard({
@@ -23,9 +25,10 @@ export function DailyReportCard({
   onEdit,
   onApprove,
   onReject,
+  onDelete,
 }) {
   const router = useRouter();
-  const status = report?.status || "draft";
+  const status = report?.status || "submitted";
   const statusColor = dailyReportsUtils.getStatusColor(status);
   const statusIcon = dailyReportsUtils.getStatusIcon(status);
   const completeness = dailyReportsUtils.calculateCompleteness(report);
@@ -150,13 +153,27 @@ export function DailyReportCard({
                 </>
               )}
               {status === "draft" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => onEdit(report)}
-                >
-                  Edit
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onEdit(report)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm('Are you sure you want to delete this report? This action cannot be undone.')) {
+                        onDelete(report.id);
+                      }
+                    }}
+                  >
+                    Delete
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -168,14 +185,16 @@ export function DailyReportCard({
 
 // Daily Report Form Component
 export function DailyReportForm({
-  isOpen,
+  isOpen = false,
   onClose,
   onSubmit,
   reportData = {},
   isEditing = false,
+  isViewing = false,
   projects = [],
   templates = [],
 }) {
+  if (!isOpen) return null;
   const [formData, setFormData] = useState({
     new_project_name: "",
     report_date:
@@ -190,140 +209,231 @@ export function DailyReportForm({
     delays_reasons: reportData?.delays_reasons || "",
     total_workers: reportData?.total_workers || 0,
     total_work_hours: reportData?.total_work_hours || 0,
-
+    photos_urls: reportData?.photos_urls || [],
     project_id: reportData?.project_id || "",
   });
+  
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  const { user } = useAuth();
 
-  const [selectedImages, setSelectedImages] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (!isOpen) return null;
+const uploadImage = async (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  try {
+    const res = await fetch("http://lequipepm.com/upload.php", {
+      method: "POST",
+      body: formData,
+    });
 
-  const handleImageUpload = (e) => {
-    const files = Array.from(e.target.files);
-    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    const data = await res.json();
+    console.log(data);
+    
 
-    if (imageFiles.length > 0) {
-      setSelectedImages((prev) => [...prev, ...imageFiles]);
+    if (data.success) {
+      return data.url; // the uploaded image URL from PHP
+    } else {
+      toast.error(data.message || "Upload failed");
+      return null;
+    }
+  } catch (error) {
+    console.error("Error uploading file:", error);
+    toast.error("Error uploading image");
+    return null;
+  }
+};
+
+
+  const handleImageUpload = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setUploading(true);
+    
+    try {
+      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+      const uploadPromises = [];
+      
+      // Convert FileList to array and filter for images only
+      const imageFiles = Array.from(files).filter(file => {
+        if (!file.type.startsWith('image/')) {
+          toast.error(`Skipped ${file.name}: Not an image file`);
+          return false;
+        }
+        if (file.size > MAX_SIZE) {
+          toast.error(`Skipped ${file.name}: File is too large (max 5MB)`);
+          return false;
+        }
+        return true;
+      });
+
+      if (imageFiles.length === 0) {
+        toast.error('No valid images to upload');
+        return;
+      }
+
+      // Upload each image
+      for (const file of imageFiles) {
+        try {
+          const imageUrl = await uploadImage(file);
+          if (imageUrl) {
+            uploadPromises.push(imageUrl);
+          }
+        } catch (error) {
+          console.error(`Error processing ${file.name}:`, error);
+          toast.error(`Failed to process ${file.name}`);
+        }
+      }
+      
+      if (uploadPromises.length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          photos_urls: [...(prev.photos_urls || []), ...uploadPromises]
+        }));
+        toast.success(`Successfully added ${uploadPromises.length} image(s)`);
+      }
+    } catch (error) {
+      console.error('Error processing images:', error);
+      toast.error('Failed to process images');
+    } finally {
+      setUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
   const removeImage = (index) => {
-    setSelectedImages((prev) => prev.filter((_, i) => i !== index));
+    setFormData(prev => ({
+      ...prev,
+      photos_urls: prev.photos_urls.filter((_, i) => i !== index)
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    const errors = dailyReportsUtils.validateReportData(formData);
-    if (errors.length > 0) {
-      errors.forEach((error) => toast.error(error));
-      return;
-    }
-
-    // If project is not selected, we'll allow submit and server will create the project when possible
-    // If user selected the __new__ option, ensure there's at least some name provided or warn
-    // if (formData.project_id === '__new__' && (!formData.new_project_name || formData.new_project_name.trim() === '')) {
-    //   toast.error('Please enter a name for the new project');
-    //   return;
-    // }
+    if (isSubmitting || isViewing) return;
 
     setIsSubmitting(true);
-    try {
-      // Build payload and include projectName when creating a new project
-      const payload = {
-        // copy only the meaningful report fields (avoid sending raw project_id when invalid)
-        report_date: formData.report_date,
-        weather_condition: formData.weather_condition,
-        work_summary: formData.work_summary,
-        work_completed: formData.work_completed,
-        work_in_progress: formData.work_in_progress,
-        work_scheduled: formData.work_scheduled,
-        safety_incidents: formData.safety_incidents,
-        quality_issues: formData.quality_issues,
-        delays_reasons: formData.delays_reasons,
 
-        total_workers: formData.total_workers,
-        total_work_hours: formData.total_work_hours,
-        progress_percentage: formData.progress_percentage,
-        project_id: formData.project_id,
-        reporter_id: "current-user-id", // Replace with actual user ID
-        status: isEditing ? formData.status || "draft" : "draft",
+    try {
+      const reportData = {
+        ...formData,
+        status: "submitted",
+        total_workers: Number(formData.total_workers) || 0,
+        total_work_hours: Number(formData.total_work_hours) || 0,
+        report_date: formData.report_date || new Date().toISOString().split("T")[0],
+        photos_urls: formData.photos_urls || []
       };
 
-      // If user explicitly selected an existing project and it's a valid UUID, include it.
+      // Remove any empty strings
+      Object.keys(reportData).forEach(key => {
+        if (reportData[key] === '' || 
+            (Array.isArray(reportData[key]) && reportData[key].length === 0)) {
+          delete reportData[key];
+        }
+      });
 
-      console.debug("Submitting daily report payload:", payload);
-      const result = await onSubmit(payload);
-      console.debug("CreateDailyReport result:", result);
+      await onSubmit(reportData);
       onClose();
     } catch (error) {
-      console.error("CreateDailyReport error:", error);
-      const msg =
-        (error && (error.message || error.toString())) ||
-        "Failed to save report";
-      toast.error(msg);
+      console.error("Error submitting report:", error);
+      toast.error("Failed to submit report. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Submit for approval (saves with status 'submitted')
-  const handleSubmitForApproval = async () => {
-    const errors = dailyReportsUtils.validateReportData(formData);
+  // State for fullscreen image view
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-    // if (formData.project_id === '__new__' && (!formData.new_project_name || formData.new_project_name.trim() === '')) {
-    //   toast.error('Please enter a name for the new project');
-    //   return;
-    // }
+  // Handle keyboard navigation for image gallery
+  useEffect(() => {
+    if (!selectedImage) return;
 
-    setIsSubmitting(true);
-    try {
-      const payload = {
-        report_date: formData.report_date,
-        weather_condition: formData.weather_condition,
-        work_summary: formData.work_summary,
-        work_completed: formData.work_completed,
-        work_in_progress: formData.work_in_progress,
-        work_scheduled: formData.work_scheduled,
-        safety_incidents: formData.safety_incidents,
-        quality_issues: formData.quality_issues,
-        delays_reasons: formData.delays_reasons,
-        total_workers: formData.total_workers,
-        total_work_hours: formData.total_work_hours,
-        status: "submitted",
-        project_id: formData?.project_id,
-      };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setSelectedImage(null);
+      } else if (e.key === 'ArrowRight') {
+        handleNextImage();
+      } else if (e.key === 'ArrowLeft') {
+        handlePrevImage();
+      }
+    };
 
-      console.debug("Submitting (for approval) daily report payload:", payload);
-      const result = await onSubmit(payload);
-      console.debug("SubmitForApproval result:", result);
-      onClose();
-    } catch (error) {
-      console.error("SubmitForApproval error:", error);
-      const msg =
-        (error && (error.message || error.toString())) ||
-        "Failed to submit report";
-      toast.error(msg);
-    } finally {
-      setIsSubmitting(false);
-    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImage, currentImageIndex]);
+
+  const openImage = (imageUrl, index) => {
+    setSelectedImage(imageUrl);
+    setCurrentImageIndex(index);
+  };
+
+  const handlePrevImage = () => {
+    const newIndex = (currentImageIndex - 1 + formData.photos_urls.length) % formData.photos_urls.length;
+    setCurrentImageIndex(newIndex);
+    setSelectedImage(formData.photos_urls[newIndex]);
+  };
+
+  const handleNextImage = () => {
+    const newIndex = (currentImageIndex + 1) % formData.photos_urls.length;
+    setCurrentImageIndex(newIndex);
+    setSelectedImage(formData.photos_urls[newIndex]);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-y-auto p-4">
-      <div className="bg-card text-card-foreground rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl border my-3 p-4">
+    <>
+      {/* Fullscreen Image Viewer */}
+      {selectedImage && (
+        <div className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-4">
+          <button
+            onClick={() => setSelectedImage(null)}
+            className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors"
+          >
+            <X className="w-8 h-8" />
+          </button>
+          
+          <button
+            onClick={handlePrevImage}
+            className="absolute left-4 text-white hover:text-gray-300 transition-colors p-2"
+            aria-label="Previous image"
+          >
+            <ChevronLeft className="w-10 h-10" />
+          </button>
+          
+          <div className="max-w-full max-h-[90vh] flex items-center justify-center">
+            <img
+              src={selectedImage}
+              alt={`Report image ${currentImageIndex + 1}`}
+              className="max-w-full max-h-[90vh] object-contain"
+            />
+          </div>
+          
+          <button
+            onClick={handleNextImage}
+            className="absolute right-4 text-white hover:text-gray-300 transition-colors p-2"
+            aria-label="Next image"
+          >
+            <ChevronRight className="w-10 h-10" />
+          </button>
+          
+          <div className="absolute bottom-4 text-white text-sm">
+            {currentImageIndex + 1} of {formData.photos_urls.length}
+          </div>
+        </div>
+      )}
+
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="bg-card text-card-foreground rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-xl border my-3 p-4">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-semibold text-card-foreground">
-            {isEditing ? "Edit Daily Report" : "Create Daily Report"}
+            {isViewing ? "View Daily Report" : isEditing ? "Edit Daily Report" : "Create Daily Report"}
           </h3>
           <button
             onClick={onClose}
@@ -347,6 +457,43 @@ export function DailyReportForm({
 
         <div className="p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Photo Gallery */}
+            {formData.photos_urls && formData.photos_urls.length > 0 && (
+              <div className="space-y-2">
+                <Label>Report Photos</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {formData.photos_urls.map((url, index) => (
+                    <div key={index} className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => openImage(url, index)}
+                        className="w-full h-24 rounded-md overflow-hidden border border-border hover:ring-2 hover:ring-primary transition-all"
+                      >
+                        <img
+                          src={url}
+                          alt={`Report photo ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </button>
+                      {!isViewing && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeImage(index);
+                          }}
+                          className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          aria-label="Remove image"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Basic Information */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -355,17 +502,12 @@ export function DailyReportForm({
                   id="project_id"
                   name="project_id"
                   value={formData.project_id}
-                  onChange={handleInputChange}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, project_id: e.target.value }))}
                   className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  disabled={isViewing}
                 >
                   <option value="" className="bg-background text-foreground">
                     Select Project
-                  </option>
-                  <option
-                    value="__new__"
-                    className="bg-background text-foreground"
-                  >
-                    -- Create new project --
                   </option>
                   {projects.map((project) => (
                     <option
@@ -377,18 +519,6 @@ export function DailyReportForm({
                     </option>
                   ))}
                 </select>
-                {formData.project_id === "__new__" && (
-                  <div className="mt-2">
-                    <Label htmlFor="new_project_name">New Project Name</Label>
-                    <Input
-                      id="new_project_name"
-                      name="new_project_name"
-                      value={formData.new_project_name}
-                      onChange={handleInputChange}
-                      placeholder="Enter new project name (optional)"
-                    />
-                  </div>
-                )}
               </div>
               <div>
                 <Label htmlFor="report_date">Report Date *</Label>
@@ -397,7 +527,8 @@ export function DailyReportForm({
                   name="report_date"
                   type="date"
                   value={formData.report_date}
-                  onChange={handleInputChange}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, report_date: e.target.value }))}
+                  disabled={isViewing}
                   required
                 />
               </div>
@@ -407,8 +538,9 @@ export function DailyReportForm({
                   id="weather_condition"
                   name="weather_condition"
                   value={formData.weather_condition}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, weather_condition: e.target.value }))}
+                  disabled={isViewing}
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:opacity-75"
                 >
                   <option value="" className="bg-background text-foreground">
                     Select Weather
@@ -454,10 +586,11 @@ export function DailyReportForm({
                 id="work_summary"
                 name="work_summary"
                 value={formData.work_summary}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
+                onChange={(e) => setFormData((prev) => ({ ...prev, work_summary: e.target.value }))}
+                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground disabled:opacity-75"
                 rows="3"
                 placeholder="Brief summary of today's work..."
+                disabled={isViewing}
                 required
               />
             </div>
@@ -470,10 +603,11 @@ export function DailyReportForm({
                   id="work_completed"
                   name="work_completed"
                   value={formData.work_completed}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, work_completed: e.target.value }))}
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground disabled:opacity-75"
                   rows="4"
                   placeholder="Detail what work was completed today..."
+                  disabled={isViewing}
                   required
                 />
               </div>
@@ -483,10 +617,11 @@ export function DailyReportForm({
                   id="work_in_progress"
                   name="work_in_progress"
                   value={formData.work_in_progress}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
+                  onChange={(e) => setFormData((prev) => ({ ...prev, work_in_progress: e.target.value }))}
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground disabled:opacity-75"
                   rows="4"
                   placeholder="Work currently in progress..."
+                  disabled={isViewing}
                 />
               </div>
             </div>
@@ -499,10 +634,11 @@ export function DailyReportForm({
                 id="work_scheduled"
                 name="work_scheduled"
                 value={formData.work_scheduled}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
+                onChange={(e) => setFormData((prev) => ({ ...prev, work_scheduled: e.target.value }))}
+                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground disabled:opacity-75"
                 rows="3"
                 placeholder="Planned work for tomorrow..."
+                disabled={isViewing}
               />
             </div>
 
@@ -514,12 +650,40 @@ export function DailyReportForm({
                 id="delays_reasons"
                 name="delays_reasons"
                 value={formData.delays_reasons}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
+                onChange={(e) => setFormData((prev) => ({ ...prev, delays_reasons: e.target.value }))}
+                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground disabled:opacity-75"
                 rows="3"
                 placeholder="Report any delays and their reasons..."
+                disabled={isViewing}
               />
             </div>
+
+            {/* Photo Upload */}
+            {!isViewing && (
+              <div className="space-y-2">
+                <Label>Upload Photos</Label>
+                <div className="flex flex-col space-y-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageUpload}
+                    disabled={uploading}
+                    className="block w-full text-sm text-foreground
+                      file:mr-4 file:py-2 file:px-4
+                      file:rounded-md file:border-0
+                      file:text-sm file:font-medium
+                      file:bg-primary file:text-primary-foreground
+                      hover:file:bg-primary/90
+                      disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Upload photos of the work progress (max 5MB per image)
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Progress and Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -531,7 +695,8 @@ export function DailyReportForm({
                   type="number"
                   min="0"
                   value={formData.total_workers}
-                  onChange={handleInputChange}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, total_workers: e.target.value }))}
+                  disabled={isViewing}
                   required
                 />
               </div>
@@ -544,235 +709,45 @@ export function DailyReportForm({
                   step="0.5"
                   min="0"
                   value={formData.total_work_hours}
-                  onChange={handleInputChange}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, total_work_hours: e.target.value }))}
+                  disabled={isViewing}
                 />
               </div>
             </div>
 
-            {/* Image Upload */}
-            <div>
-              <Label htmlFor="images">Upload Images</Label>
-              <Input
-                id="images"
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleImageUpload}
-                className="mb-2"
-              />
-              {selectedImages.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
-                  {selectedImages.map((image, index) => (
-                    <div key={index} className="relative">
-                      <img
-                        src={URL.createObjectURL(image)}
-                        alt={`Upload ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-lg"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
             {/* Form Actions */}
-            <div className="flex justify-end space-x-3 pt-6 border-t border-border">
-              <Button
-                variant="outline"
-                onClick={onClose}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting
-                  ? "Saving..."
-                  : isEditing
-                  ? "Update Report"
-                  : "Save as Draft"}
-              </Button>
-              {!isEditing && (
+            {!isViewing && (
+              <div className="flex justify-end space-x-3 pt-6 border-t border-border">
                 <Button
-                  type="button"
-                  onClick={() => {
-                    // Submit for approval
-                    handleSubmitForApproval();
-                  }}
+                  variant="outline"
+                  onClick={onClose}
                   disabled={isSubmitting}
-                  className="bg-green-600 hover:bg-green-700"
                 >
-                  Submit for Approval
+                  Cancel
                 </Button>
-              )}
-            </div>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting
+                    ? "Saving..."
+                    : isEditing
+                    ? "Update Report"
+                    : "Save as Draft"}
+                </Button>
+              </div>
+            )}
+            {isViewing && (
+              <div className="flex justify-end space-x-3 pt-6 border-t border-border">
+                <Button
+                  variant="outline"
+                  onClick={onClose}
+                >
+                  Close
+                </Button>
+              </div>
+            )}
           </form>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// Message Component
-export function MessageCard({ message, onDelete, canDelete = false }) {
-  const senderName =
-    message.auth?.users?.raw_user_meta_data?.first_name || "Unknown";
-  const isAdmin = message.is_admin_message;
-
-  return (
-    <div className={`flex ${isAdmin ? "justify-end" : "justify-start"} mb-4`}>
-      <div
-        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-          isAdmin
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-muted-foreground"
-        }`}
-      >
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs font-medium">{senderName}</span>
-          {canDelete && (
-            <button
-              onClick={() => onDelete(message.id)}
-              className="text-xs opacity-70 hover:opacity-100"
-            >
-              ×
-            </button>
-          )}
-        </div>
-        <p className="text-sm">{message.message}</p>
-        <span className="text-xs opacity-70">
-          {new Date(message.created_at).toLocaleTimeString()}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// Approval Modal Component
-export function ApprovalModal({
-  isOpen,
-  onClose,
-  onApprove,
-  onReject,
-  report,
-  isProcessing = false,
-}) {
-  const [adminNotes, setAdminNotes] = useState("");
-  const [rejectionReason, setRejectionReason] = useState("");
-
-  if (!isOpen || !report) return null;
-
-  const handleApprove = () => {
-    onApprove(report.id, adminNotes);
-    onClose();
-  };
-
-  const handleReject = () => {
-    if (!rejectionReason.trim()) {
-      toast.error("Please provide a rejection reason");
-      return;
-    }
-    onReject(report.id, rejectionReason, adminNotes);
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-card text-card-foreground rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto shadow-xl border">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-semibold text-card-foreground">
-            Review Daily Report
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <div className="p-6">
-          <div className="mb-4 p-3 bg-muted rounded-lg">
-            <div className="text-sm">
-              <div className="font-medium">
-                Report Date: {dailyReportsUtils.formatDate(report.report_date)}
-              </div>
-              <div className="text-muted-foreground">
-                By: {report.reporter_first_name} {report.reporter_last_name}
-              </div>
-              <div className="text-muted-foreground mt-1">
-                {report.work_summary}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="admin_notes">Admin Notes</Label>
-              <textarea
-                id="admin_notes"
-                value={adminNotes}
-                onChange={(e) => setAdminNotes(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
-                rows="3"
-                placeholder="Add notes for the reporter..."
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="rejection_reason">
-                Rejection Reason (if rejecting)
-              </Label>
-              <textarea
-                id="rejection_reason"
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-input text-card-foreground"
-                rows="2"
-                placeholder="Reason for rejection..."
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-border">
-            <Button variant="outline" onClick={onClose} disabled={isProcessing}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleReject}
-              disabled={isProcessing}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Reject
-            </Button>
-            <Button
-              onClick={handleApprove}
-              disabled={isProcessing}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              Approve
-            </Button>
-          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
