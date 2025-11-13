@@ -1,5 +1,5 @@
 import { useRouter } from "next/navigation";
-import supabase from "../../lib/supabaseClinet";
+import supabase from "../lib/supabaseClinet";
 
 export const signOut = async () => {
   const { error } = await supabase.auth.signOut();

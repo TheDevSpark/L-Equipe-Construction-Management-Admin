@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ProjectSelector } from "@/components/ProjectSelector";
 import toast from "react-hot-toast";
-import supabase from "../../../../lib/supabaseClinet";
+import supabase from "@/lib/supabaseClinet";
 
 export default function TeamsPage() {
   const [projects, setProjects] = useState([]);

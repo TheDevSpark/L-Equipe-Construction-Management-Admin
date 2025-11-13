@@ -181,14 +181,14 @@ export function DailyReportCard({
       </CardContent>
     </Card>
   );
-}
+} 
 
 // Daily Report Form Component
 export function DailyReportForm({
   isOpen = false,
   onClose,
   onSubmit,
-  reportData = {},
+  reportData = {},  
   isEditing = false,
   isViewing = false,
   projects = [],

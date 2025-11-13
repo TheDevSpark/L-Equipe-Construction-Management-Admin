@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { ProjectSelector, ProjectInfoCard } from "@/components/ProjectSelector";
 import ScheduleUploader from "@/components/ScheduleUploader";
 import { ThemeToggle } from "@/components/theme-toggle";
-import supabase from "../../../../lib/supabaseClinet";
+import supabase from "@/lib/supabaseClinet";
 
 export default function SchedulePage() {
   // Project state

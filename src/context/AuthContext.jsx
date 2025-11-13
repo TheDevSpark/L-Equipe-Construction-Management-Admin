@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import supabase from "../../lib/supabaseClinet";
+import supabase from "@/lib/supabaseClinet";
 
 const AuthContext = createContext();
 

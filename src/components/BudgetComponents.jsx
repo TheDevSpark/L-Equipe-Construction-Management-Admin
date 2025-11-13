@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import toast from "react-hot-toast";
-import supabase from "../../lib/supabaseClinet";
+import supabase from "@/lib/supabaseClinet";
 
 // Budget Category Card Component
 export function BudgetCategoryCard({ category, onEdit, onDelete }) {

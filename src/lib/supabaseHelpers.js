@@ -1,4 +1,4 @@
-import supabase from "../../lib/supabaseClinet";
+import supabase from "./supabaseClinet";
 
 // Lightweight uuid v4 generator (browser-friendly) and validator
 function uuidv4() {

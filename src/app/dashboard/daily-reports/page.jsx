@@ -42,7 +42,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { ProjectSelector, ProjectInfoCard } from "@/components/ProjectSelector";
 import { DailyReportCard, DailyReportForm } from "@/components/DailyReportComponents";
 import toast from "react-hot-toast";
-import supabase from "../../../../lib/supabaseClinet";
+import supabase from "@/lib/supabaseClinet";
 import {
   dailyReportsApi,
 } from "@/lib/dailyReportsApi";

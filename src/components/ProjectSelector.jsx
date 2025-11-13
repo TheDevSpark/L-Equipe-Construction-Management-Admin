@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { ClientOnly } from "@/components/ClientOnly";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import supabase from "../../lib/supabaseClinet.js";
+import supabase from "@/lib/supabaseClinet.js";
 import { Delete } from "lucide-react";
 
 // Project Selector Component
@@ -371,108 +371,95 @@ function ProjectCreationModal({ isOpen, onClose, onProjectCreated }) {
 
 // Project Info Card Component
 export function ProjectInfoCard({ project }) {
-  const router = useRouter();
+  const [collaboratorNames, setCollaboratorNames] = useState([]);
 
-  const handleProjectClick = () => {
-    if (project && project.id) {
-      router.push(`/dashboard/projects/${project.id}`);
+  useEffect(() => {
+    // clear previous names immediately when project changes
+    setCollaboratorNames([]);
+
+    // if no project, nothing to do
+    if (!project) return;
+
+    // normalize ids from team_members (support both {id} or raw id values)
+    const ids = (project.team_members || [])
+      .map((m) => (typeof m === "object" ? m?.id : m))
+      .filter(Boolean);
+
+    // if there are no ids, leave collaboratorNames empty
+    if (ids.length === 0) {
+      setCollaboratorNames([]);
+      return;
     }
-  };
+
+    let mounted = true; // cancellation flag to avoid setting state on unmounted/stale fetch
+
+    const fetchCollaboratorNames = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", ids);
+
+        if (error) throw error;
+
+        if (!mounted) return;
+
+        // Build a map id => displayName (prefer full_name, fallback to name or id)
+        const nameMap = new Map(
+          (data || []).map((u) => [u.id, u.full_name ?? u.name ?? String(u.id)])
+        );
+
+        // Preserve original project order: map ids -> names, fallback to id if missing
+        const orderedNames = ids.map((id) => nameMap.get(id) ?? String(id));
+
+        setCollaboratorNames(orderedNames);
+      } catch (err) {
+        console.error("Error fetching collaborator names:", err);
+        if (mounted) setCollaboratorNames([]); // clear on error (optional)
+      }
+    };
+
+    fetchCollaboratorNames();
+
+    return () => {
+      mounted = false;
+    };
+  }, [project]); // re-run whenever the project object changes
 
   if (!project) {
     return (
       <ClientOnly>
         <Card>
-          <CardContent className="p-6">
-            <div className="text-center text-muted-foreground">
-              <svg
-                className="w-12 h-12 mx-auto mb-4 opacity-50"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                />
-              </svg>
-              <p>Please select a project to view details</p>
-            </div>
+          <CardContent className="p-6 text-center text-muted-foreground">
+            <p>Please select a project to view details</p>
           </CardContent>
         </Card>
       </ClientOnly>
     );
   }
 
-  const getStatusColor = (status) => {
-    const colors = {
-      planning: "bg-blue-100 text-blue-800",
-      active: "bg-green-100 text-green-800",
-      on_hold: "bg-yellow-100 text-yellow-800",
-      completed: "bg-gray-100 text-gray-800",
-      cancelled: "bg-red-100 text-red-800",
-    };
-    return colors[status || "planning"] || "bg-gray-100 text-gray-800";
-  };
-
-  const formatCurrency = (amount) => {
-    if (!amount) return "Not set";
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount);
-  };
+  const formatCurrency = (amount) =>
+    amount
+      ? new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+        }).format(amount)
+      : "Not set";
 
   return (
     <ClientOnly>
-      <Card
-        className="cursor-pointer hover:shadow-lg transition-shadow duration-200 border-2 hover:border-primary/50"
-        onClick={handleProjectClick}
-      >
+      <Card className="hover:shadow-lg transition-shadow duration-200 border-2 hover:border-primary/50">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-xl flex items-center space-x-2">
-                <span>{project.projectName}</span>
-                <svg
-                  className="w-4 h-4 text-muted-foreground"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                  />
-                </svg>
-              </CardTitle>
-              <CardDescription>
-                {project.projectLocation || "No location specified"}
-              </CardDescription>
-              <p className="text-xs text-muted-foreground mt-1">
-                Click to view project details
-              </p>
-            </div>
-            <span
-              className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                project.status
-              )}`}
-            >
-              {(project.status || "planning").replace("_", " ").toUpperCase()}
-            </span>
-          </div>
+          <CardTitle className="text-xl">{project.projectName}</CardTitle>
+          <CardDescription>
+            {project.projectLocation || "No location specified"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             {project.description && (
               <div>
-                <h4 className="font-medium text-foreground mb-1">
-                  Description
-                </h4>
+                <h4 className="font-medium">Description</h4>
                 <p className="text-sm text-muted-foreground">
                   {project.description}
                 </p>
@@ -481,17 +468,18 @@ export function ProjectInfoCard({ project }) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <h4 className="font-medium text-foreground mb-1">Budget</h4>
+                <h4 className="font-medium">Budget</h4>
                 <p className="text-sm text-muted-foreground">
                   {formatCurrency(project.budget)}
                 </p>
               </div>
+
               <div>
-                <h4 className="font-medium text-foreground mb-1">
-                  Collaborators
-                </h4>
+                <h4 className="font-medium">Collaborators</h4>
                 <p className="text-sm text-muted-foreground">
-                  {project.projectCollabrate || "None specified"}
+                  {collaboratorNames.length > 0
+                    ? collaboratorNames.join(", ")
+                    : "None specified"}
                 </p>
               </div>
             </div>
@@ -500,9 +488,7 @@ export function ProjectInfoCard({ project }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {project.startDate && (
                   <div>
-                    <h4 className="font-medium text-foreground mb-1">
-                      Start Date
-                    </h4>
+                    <h4 className="font-medium">Start Date</h4>
                     <p className="text-sm text-muted-foreground">
                       {new Date(project.startDate).toLocaleDateString()}
                     </p>
@@ -510,9 +496,7 @@ export function ProjectInfoCard({ project }) {
                 )}
                 {project.endDate && (
                   <div>
-                    <h4 className="font-medium text-foreground mb-1">
-                      End Date
-                    </h4>
+                    <h4 className="font-medium">End Date</h4>
                     <p className="text-sm text-muted-foreground">
                       {new Date(project.endDate).toLocaleDateString()}
                     </p>
@@ -522,7 +506,7 @@ export function ProjectInfoCard({ project }) {
             )}
 
             <div>
-              <h4 className="font-medium text-foreground mb-1">Created</h4>
+              <h4 className="font-medium">Created</h4>
               <p className="text-sm text-muted-foreground">
                 {new Date(project.created_at).toLocaleDateString()}
               </p>
@@ -533,3 +517,4 @@ export function ProjectInfoCard({ project }) {
     </ClientOnly>
   );
 }
+

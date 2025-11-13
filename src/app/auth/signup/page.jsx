@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast, { Toaster } from "react-hot-toast";
-import supabase from "../../../../lib/supabaseClinet";
+import supabase from "@/lib/supabaseClinet";
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState("");

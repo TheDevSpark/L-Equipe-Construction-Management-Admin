@@ -32,7 +32,7 @@
     ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx"
-, "lib/supabaseClinet.js", "src/app/auth/signin/page.jsx", "src/app/auth/signup/page.jsx"  ],
+, "src/lib/supabaseClinet.js", "src/app/auth/signin/page.jsx", "src/app/auth/signup/page.jsx"  ],
   "exclude": [
     "node_modules"
   ]

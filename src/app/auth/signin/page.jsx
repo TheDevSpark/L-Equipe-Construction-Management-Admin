@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { useAuth } from "../../../context/AuthContext";
-import { supabase } from "../../../../lib/supabaseClinet";
+import { useAuth } from "@/context/AuthContext";
+import { supabase } from "@/lib/supabaseClinet";
 
 export default function SigninPage() {
   const auth = useAuth();

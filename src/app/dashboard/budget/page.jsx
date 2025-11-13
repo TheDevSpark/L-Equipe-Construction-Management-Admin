@@ -26,7 +26,7 @@ import {
 } from "chart.js";
 import { Bar, Doughnut } from "react-chartjs-2";
 import toast from "react-hot-toast";
-import supabase from "../../../../lib/supabaseClinet";
+import supabase from "@/lib/supabaseClinet";
 
 ChartJS.register(
   CategoryScale,

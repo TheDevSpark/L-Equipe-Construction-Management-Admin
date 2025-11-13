@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ProjectSelector, ProjectInfoCard } from "@/components/ProjectSelector";
 import { ThemeToggle } from "@/components/theme-toggle";
-import supabase from "../../../../lib/supabaseClinet";
+import supabase from "@/lib/supabaseClinet";
 
 export default function ReportsPage() {
   // Project state

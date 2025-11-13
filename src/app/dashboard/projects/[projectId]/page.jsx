@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ArrowLeft, Calendar, Users, DollarSign, MapPin, Clock, CheckCircle, AlertCircle } from "lucide-react";
 import { Breadcrumb } from "@/components/Breadcrumb";
-import supabase from "../../../../../lib/supabaseClinet";
+import supabase from "@/lib/supabaseClinet";
 
 export default function ProjectDetailPage() {
   const params = useParams();

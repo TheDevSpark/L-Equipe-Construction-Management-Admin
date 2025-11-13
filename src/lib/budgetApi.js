@@ -1,4 +1,4 @@
-import supabase from '../../lib/supabaseClinet.js';
+import supabase from './supabaseClinet.js';
 
 // Budget Categories API
 export const budgetCategoriesApi = {
