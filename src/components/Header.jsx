@@ -1,13 +1,11 @@
 "use client";
 import { ThemeToggle } from "./theme-toggle";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "../context/AuthContext";
 import toast from "react-hot-toast";
 import Image from "next/image";
 import { signOut } from "../utils/helpers";
 import { useRouter } from "next/navigation";
 export default function Header({ onMenuToggle }) {
-  const { user } = useAuth();
   const router = useRouter();
   const handleLogout = async () => {
     try {
@@ -86,39 +84,7 @@ export default function Header({ onMenuToggle }) {
                 d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
               />
             </svg>
-            <span className="text-sm font-medium text-foreground">
-              {user?.email ? user.email.split("@")[0] : "Admin"}
-            </span>
-          </div>
-
-          {/* Logout Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleLogout}
-            className="hidden sm:flex items-center gap-2"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-              />
-            </svg>
-            Logout
-          </Button>
-
-          {/* Avatar */}
-          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-            <span className="text-primary-foreground text-sm font-medium">
-              {user?.email ? user.email.charAt(0).toUpperCase() : "A"}
-            </span>
+            <span className="text-sm font-medium text-foreground">Admin</span>
           </div>
         </div>
       </div>

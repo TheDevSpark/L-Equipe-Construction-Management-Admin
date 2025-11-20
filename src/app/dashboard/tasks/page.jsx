@@ -42,25 +42,23 @@ function page() {
   const [userProfiles, setUserProfiles] = useState({});
   const [creationModal, setCreationModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const { getTasks } = require("@/lib/taskHelpers");
 
   const handleDeleteTask = async (taskId) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
-    
+    if (!window.confirm("Are you sure you want to delete this task?")) return;
+
     try {
       setIsDeleting(true);
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId);
+      const { error } = await supabase.from("tasks").delete().eq("id", taskId);
 
       if (error) throw error;
-      
+
       // Refresh tasks after successful deletion
-      await getTasks();
-      toast.success('Task deleted successfully');
+      await getTasks(selectedProject?.id);
+      toast.success("Task deleted successfully");
     } catch (error) {
-      console.error('Error deleting task:', error);
-      toast.error('Failed to delete task');
+      console.error("Error deleting task:", error);
+      toast.error("Failed to delete task");
     } finally {
       setIsDeleting(false);
     }
@@ -71,56 +69,21 @@ function page() {
       console.log(tasks);
     }
   }, [selectedProject, tasks]);
-  const getUserProfiles = async (userIds) => {
-    if (!userIds || userIds.length === 0) return {};
+  const fetchTasks = async () => {
+    if (!selectedProject?.id) return;
 
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, email, role")
-      .in("id", userIds);
-
-    if (error) {
-      console.error("Error fetching user profiles:", error);
-      return {};
+    try {
+      const { tasks, userProfiles } = await getTasks(selectedProject.id);
+      setUserProfiles(userProfiles);
+      setTasks(tasks);
+    } catch (error) {
+      console.error("Error in fetchTasks:", error);
+      toast.error(error.message || "Failed to load tasks");
     }
-
-    // Convert array to object with user IDs as keys
-    return data.reduce(
-      (acc, user) => ({
-        ...acc,
-        [user.id]: user,
-      }),
-      {}
-    );
-  };
-
-  const getTasks = async () => {
-    const { data, error } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("project_id", selectedProject.id);
-
-    if (error) {
-      console.error("Error fetching tasks:", error);
-      toast.error("Failed to load tasks");
-      return;
-    }
-
-    // Get all unique user IDs from all tasks
-    const allUserIds = [
-      ...new Set(data.flatMap((task) => task.assigned_to || [])),
-    ];
-
-    // Fetch user profiles for all assigned users
-    const profiles = await getUserProfiles(allUserIds);
-    setUserProfiles(profiles);
-    setTasks(data);
   };
   useEffect(() => {
-    if (selectedProject) {
-      getTasks();
-    }
-  }, [selectedProject]);
+    fetchTasks();
+  }, [selectedProject?.id]);
 
   if (!selectedProject) {
     return (
@@ -190,67 +153,75 @@ function page() {
                 <CardFooter className="flex justify-between items-center">
                   <div className="space-x-2">
                     <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline">View Task</Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{task.title}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {task.description}
-                          <br />
-                          <br />
-                          <div className="mt-2">
-                            <span className="font-bold">Assigned To:</span>
-                            <div className="mt-2 space-y-2">
-                              {task.assigned_to &&
-                              task.assigned_to.length > 0 ? (
-                                task.assigned_to.map((userId) => {
-                                  const user = userProfiles[userId];
-                                  return (
-                                    <div
-                                      key={userId}
-                                      className="flex items-center gap-2"
-                                    >
-                                      <div className="w-2 h-2 rounded-full bg-primary"></div>
-                                      <span>
-                                        {user?.full_name ||
-                                          user?.email ||
-                                          `User (${userId})`}
-                                      </span>
-                                    </div>
-                                  );
-                                })
-                              ) : (
-                                <span className="text-muted-foreground">
-                                  No one assigned
-                                </span>
-                              )}
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline">View Task</Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{task.title}</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {task.description}
+                            <br />
+                            <br />
+                            <div className="mt-2">
+                              <span className="font-bold">Assigned To:</span>
+                              <div className="mt-2 space-y-2">
+                                {task.assigned_to &&
+                                task.assigned_to.length > 0 ? (
+                                  task.assigned_to.map((userId) => {
+                                    const user = userProfiles[userId];
+                                    return (
+                                      <div
+                                        key={userId}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <div className="w-2 h-2 rounded-full bg-primary"></div>
+                                        <span>
+                                          {user?.full_name ||
+                                            user?.email ||
+                                            `User (${userId})`}
+                                        </span>
+                                      </div>
+                                    );
+                                  })
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    No one assigned
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => handleDeleteTask(task.id)}
-                  disabled={isDeleting}
-                  className="text-red-500 hover:bg-red-50 hover:text-red-600"
-                  title="Delete task"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </CardFooter>
-            </CardHeader>
-          </Card>
-        ))}
-      </div>
+                            {task.notes && (
+                              <div className="mt-2">
+                                <span className="font-bold">Notes:</span>
+                                <div className="mt-2 space-y-2">
+                                  {task.notes}
+                                </div>
+                              </div>
+                            )}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteTask(task.id)}
+                    disabled={isDeleting}
+                    className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                    title="Delete task"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </CardFooter>
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
       ) : (
         <Empty>
           <EmptyHeader>

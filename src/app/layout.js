@@ -1,8 +1,8 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Layout from "../components/Layout";
-import { AuthProvider } from "../context/AuthContext";
 import { ThemeProvider } from "../components/theme-provider";
+import AuthCheck from "@/components/AuthCheck";
+import { AuthContextProvider } from "@/context/AuthContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,7 +16,8 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "ProBuild PM - Project Management",
-  description: "Professional project management dashboard for construction projects",
+  description:
+    "Professional project management dashboard for construction projects",
 };
 
 export default function RootLayout({ children }) {
@@ -31,9 +32,9 @@ export default function RootLayout({ children }) {
           enableSystem
           disableTransitionOnChange
         >
-          <AuthProvider>
-            {children}
-          </AuthProvider>
+          <AuthContextProvider>
+            <AuthCheck>{children}</AuthCheck>
+          </AuthContextProvider>
         </ThemeProvider>
       </body>
     </html>
